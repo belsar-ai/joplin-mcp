@@ -40,7 +40,7 @@ codex mcp remove joplin
 ```
 
 ```bash
-gemini extensions uninstall joplin
+gemini extensions uninstall joplin-mcp
 ```
 
 ## Example Usage
