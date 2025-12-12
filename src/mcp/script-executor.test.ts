@@ -1,7 +1,11 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { ScriptExecutor } from './script-executor.js';
 import { JoplinApiClient } from '../api/client.js';
-import { QuickJSWASMModule, QuickJSContext, QuickJSHandle } from 'quickjs-emscripten';
+import {
+  QuickJSWASMModule,
+  QuickJSContext,
+  QuickJSHandle,
+} from 'quickjs-emscripten';
 
 describe('ScriptExecutor', () => {
   let mockQjs: QuickJSWASMModule;
@@ -11,11 +15,12 @@ describe('ScriptExecutor', () => {
   // Mock implementation of QuickJS
   beforeEach(() => {
     // Basic mocks for handles
-    const createMockHandle = (val: unknown) => ({
-      dispose: vi.fn(),
-      alive: true, // Add alive property for strict checks
-      value: val,
-    } as unknown as QuickJSHandle);
+    const createMockHandle = (val: unknown) =>
+      ({
+        dispose: vi.fn(),
+        alive: true, // Add alive property for strict checks
+        value: val,
+      }) as unknown as QuickJSHandle;
 
     mockVm = {
       newFunction: vi.fn((name, fn) => createMockHandle(fn)),
@@ -24,26 +29,32 @@ describe('ScriptExecutor', () => {
       newNumber: vi.fn((num) => createMockHandle(num)),
       newUndefined: vi.fn(() => createMockHandle(undefined)),
       newPromise: vi.fn(() => ({
-          handle: createMockHandle('promise'), 
-          resolve: createMockHandle('resolve'), 
-          reject: createMockHandle('reject')
+        handle: createMockHandle('promise'),
+        resolve: createMockHandle('resolve'),
+        reject: createMockHandle('reject'),
       })),
       newError: vi.fn((msg) => createMockHandle(msg)), // Mock newError
       setProp: vi.fn(),
       defineProp: vi.fn(),
       callFunction: vi.fn(),
-      evalCode: vi.fn(() => ({ // evalCode returns a Result
+      evalCode: vi.fn(() => ({
+        // evalCode returns a Result
         value: createMockHandle('result'),
-        error: undefined
+        error: undefined,
       })),
-      resolvePromise: vi.fn(async () => ({ // resolvePromise returns a Result
+      resolvePromise: vi.fn(async () => ({
+        // resolvePromise returns a Result
         value: createMockHandle('resolved'),
-        error: undefined
+        error: undefined,
       })),
       unwrapResult: vi.fn((res) => res.value), // Mock unwrapResult
       dump: vi.fn((handle: unknown) => (handle as { value: unknown }).value),
       dispose: vi.fn(),
       global: createMockHandle('global'),
+      runtime: {
+        setInterruptHandler: vi.fn(),
+        removeInterruptHandler: vi.fn(),
+      },
       json: {
         stringify: vi.fn((val) => createMockHandle(JSON.stringify(val))),
       },
@@ -51,8 +62,14 @@ describe('ScriptExecutor', () => {
 
     mockQjs = {
       newContext: vi.fn(() => mockVm),
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      QuickJSError: class QuickJSError extends Error { constructor(v: any) { super(); (this as any).value = v; } },
+      /* eslint-disable @typescript-eslint/no-explicit-any */
+      QuickJSError: class QuickJSError extends Error {
+        constructor(v: any) {
+          super();
+          (this as any).value = v;
+        }
+      },
+      /* eslint-enable @typescript-eslint/no-explicit-any */
     } as unknown as QuickJSWASMModule;
 
     mockClient = {
@@ -71,12 +88,12 @@ describe('ScriptExecutor', () => {
     // since we aren't running real QuickJS in unit tests.
     // In our implementation, evalCode returns a handle, which we unwrap,
     // then pass to resolvePromise.
-    
+
     // Mock resolvePromise to return 2
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (mockVm.resolvePromise as any).mockResolvedValue({
-        value: { dispose: vi.fn(), value: 2 },
-        error: undefined
+      value: { dispose: vi.fn(), value: 2 },
+      error: undefined,
     });
 
     const { result, logs } = await executor.execute('return 1 + 1;');
@@ -87,28 +104,28 @@ describe('ScriptExecutor', () => {
 
   it('should capture console logs', async () => {
     const executor = createExecutor();
-    
+
     // We need to simulate the console.log callback
     // This is tricky to mock perfectly without real QJS, but we can check if console is defined
     await executor.execute('console.log("foo")');
-    
+
     // Verify console was injected using setProp (global object)
     expect(mockVm.setProp).toHaveBeenCalledWith(
-        expect.anything(), 
-        'console', 
-        expect.anything()
+      expect.anything(),
+      'console',
+      expect.anything(),
     );
   });
 
   it('should inject joplin client', async () => {
     const executor = createExecutor();
     await executor.execute('some script');
-    
+
     // Verify joplin object was injected using setProp
     expect(mockVm.setProp).toHaveBeenCalledWith(
-        expect.anything(),
-        'joplin',
-        expect.anything()
+      expect.anything(),
+      'joplin',
+      expect.anything(),
     );
   });
 
@@ -116,7 +133,7 @@ describe('ScriptExecutor', () => {
     const executor = createExecutor();
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (mockVm.evalCode as any).mockImplementation(() => {
-        throw new Error('Script error');
+      throw new Error('Script error');
     });
 
     await expect(executor.execute('bad code')).rejects.toThrow('Script error');
