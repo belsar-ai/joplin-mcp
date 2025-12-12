@@ -112,8 +112,8 @@ joplin.notebooks.getNotebookNotes(notebookId)
 joplin.notes.listAllNotes(fields?, includeDeleted?, orderBy?, orderDir?, limit?)
 joplin.notes.searchNotes(query) // Returns array of notes
 joplin.notes.getNote(id) // Returns full note object with body
-joplin.notes.createNote(title, body, notebookId, tags?, isTodo?, ...)
-joplin.notes.updateNote(id, { title, body, parent_id, is_todo, ... })
+joplin.notes.createNote(title, body, notebookId?, tags?, isTodo?, todoDue?, todoCompleted?)
+joplin.notes.updateNote(id, { title?, body?, parent_id?, is_todo?, todo_due?, todo_completed? })
 joplin.notes.appendToNote(id, content) // Appends text to end
 joplin.notes.prependToNote(id, content) // Prepends text to start
 joplin.notes.deleteNote(id)
@@ -195,6 +195,15 @@ return "Updated due dates";
               (result as Array<{ id: string; title: string }>)
                 .map((item) => `- ${item.title} (ID: ${item.id})`)
                 .join('\n');
+          } else if (
+            typeof result === 'object' &&
+            result !== null &&
+            'id' in result &&
+            'title' in result
+          ) {
+            // Single Joplin-like object (e.g., a note, notebook, or tag)
+            const item = result as { id: string; title: string };
+            textResult = `Found 1 item: ${item.title} (ID: ${item.id})`;
           } else {
             // Fallback for other complex objects, use compact JSON
             textResult = JSON.stringify(result);
