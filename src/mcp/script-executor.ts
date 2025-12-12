@@ -13,11 +13,7 @@ export class ScriptExecutor {
     // to allow top-level await and ensure we can capture the return value.
     const wrappedCode = `
       (async () => {
-        try {
-          ${code}
-        } catch (e) {
-          throw e;
-        }
+        ${code}
       })()
     `;
 
