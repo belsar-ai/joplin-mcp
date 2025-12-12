@@ -9,6 +9,7 @@ import {
 import { getVersion } from './version.js';
 import { JoplinApiClient } from './api/client.js';
 import { ScriptExecutor } from './mcp/script-executor.js';
+import { getQuickJS, QuickJSWASMModule } from 'quickjs-emscripten'; // Corrected Import
 
 // Re-export for backwards compatibility with tests
 export { discoverJoplinToken } from './config/token-discovery.js';
@@ -18,18 +19,16 @@ export class JoplinServer {
   private server: Server;
   private apiClient: JoplinApiClient;
   private scriptExecutor: ScriptExecutor;
+  private qjsInstance: QuickJSWASMModule; // Corrected Type
 
-  constructor() {
+  // Private constructor to enforce static async factory
+  private constructor(qjsInstance: QuickJSWASMModule) {
+    this.qjsInstance = qjsInstance; // Assign the pre-initialized instance
     this.server = new Server(
       {
         name: 'joplin-server',
         version: getVersion(),
-        description: `MCP server for Joplin note-taking application.
-        
-This server exposes a single, powerful tool: 'execute_joplin_script'.
-This tool allows you to write and execute JavaScript/TypeScript code to interact with the Joplin API directly.
-This enables complex workflows, batch processing, and "agentic" behaviors in a single turn.
-`,
+        // Removed unsupported 'description' property
       },
       {
         capabilities: {
@@ -39,9 +38,15 @@ This enables complex workflows, batch processing, and "agentic" behaviors in a s
     );
 
     this.apiClient = new JoplinApiClient();
-    this.scriptExecutor = new ScriptExecutor(this.apiClient);
+    this.scriptExecutor = new ScriptExecutor(this.apiClient, this.qjsInstance); // Pass qjsInstance
     this.setupToolHandlers();
     this.setupErrorHandling();
+  }
+
+  // Static async factory method
+  static async create(): Promise<JoplinServer> {
+    const qjs = await getQuickJS();
+    return new JoplinServer(qjs);
   }
 
   private getToolsDefinitions() {
@@ -131,7 +136,7 @@ return "Updated due dates";
       if (name === 'execute_joplin_script') {
         const script = args.script as string;
         try {
-          const result = await this.scriptExecutor.execute(script);
+          const { result, logs } = await this.scriptExecutor.execute(script);
 
           // Format the result for display
           let textResult = '';
@@ -143,24 +148,38 @@ return "Updated due dates";
             textResult = JSON.stringify(result, null, 2);
           }
 
+          let finalContent = textResult;
+          if (logs.length > 0) {
+              finalContent += `\n\n--- Script Logs ---\n${logs.join('\n')}`;
+          }
+
+
           return {
             content: [
               {
                 type: 'text',
-                text: textResult,
+                text: finalContent,
               },
             ],
           };
         } catch (error) {
-          return {
-            content: [
-              {
-                type: 'text',
-                text: `Script Execution Error: ${error instanceof Error ? error.message : String(error)}`,
-              },
-            ],
-            isError: true,
-          };
+            const errorObj = error as { logs?: string[], message?: string };
+            const errorLogs = errorObj.logs || [];
+            const errorOutput = `Script Execution Error: ${error instanceof Error ? error.message : String(error)}`;
+            let finalErrorContent = errorOutput;
+            if (errorLogs.length > 0) {
+                finalErrorContent += `\n\n--- Script Logs ---\n${errorLogs.join('\n')}`;
+            }
+
+            return {
+                content: [
+                    {
+                        type: 'text',
+                        text: finalErrorContent,
+                    },
+                ],
+                isError: true,
+            };
         }
       }
 
@@ -175,6 +194,8 @@ return "Updated due dates";
 
     process.on('SIGINT', async () => {
       await this.server.close();
+      // qjsInstance doesn't have a dispose method, contexts do. 
+      // The module itself usually doesn't need explicit disposal in this context unless using a variant that does.
       process.exit(0);
     });
   }
