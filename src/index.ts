@@ -126,11 +126,6 @@ joplin.tags.addTagsToNote(noteId, "tag1,tag2")
 joplin.tags.removeTagsFromNote(noteId, "tag1,tag2")
 joplin.tags.createTag(title)
 
-// RESOURCES (Attachments)
-joplin.resources.listAllResources()
-joplin.resources.getNoteResources(noteId)
-joplin.resources.downloadResourceToFile(resourceId, path)
-
 EXAMPLES:
 
 1. Search and summarize:

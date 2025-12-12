@@ -105,12 +105,6 @@ The AI has access to a global `joplin` object with the following methods:
 - `removeTagsFromNote(noteId, tags)`
 - `createTag(title)`
 
-### Resources/Attachments (`joplin.resources`)
-
-- `listAllResources()`
-- `downloadResourceToFile(resourceId, path)`
-- `getNoteResources(noteId)`
-
 ## Troubleshooting
 
 - Verify Joplin desktop app is running
