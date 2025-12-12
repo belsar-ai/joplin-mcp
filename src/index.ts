@@ -53,6 +53,51 @@ The script has access to a global 'joplin' object.
 You can use top-level 'await'.
 Return the result you want to see.
 
+CRITICAL SEARCH STRATEGY:
+When users ask "do you have notes about X?", DO NOT search their exact phrase. Instead, use OR logic with synonyms:
+
+Examples:
+- User: "linux installation steps" → Query: "any:1 linux install installation setup guide tutorial configure"
+- User: "project documentation" → Query: "any:1 project initiative plan documentation docs readme"
+- User: "recent work notes" → Query: "tag:work updated:month-1"
+
+Key syntax:
+- OR logic: "any:1 term1 term2 term3" (matches any term)
+- Wildcards: "docker*" (matches docker, dockerfile, etc.)
+- Field filters: "tag:work", "title:meeting", "notebook:Personal"
+- Date filters: "updated:month-1", "created:2024"
+- Exclude: "-archived"
+
+Advanced filters (less obvious but powerful):
+- resource:image/*, resource:application/pdf (specific attachment types)
+- iscompleted:0|1 (todo completion status)
+- type:note|todo (limit by note vs todo)
+
+NEVER DO THIS:
+- ❌ Search the user's literal question ("do you have notes about docker?")—it usually returns nothing. Always translate to broader concepts first.
+
+WHEN TO USE:
+- User asks "do you have notes about X?"
+- Searching by keywords or concepts
+
+WHEN NOT TO USE:
+- For "all notes" → Use list_all_notes
+- Specific notebook → Use get_notebook_notes
+- Specific tag → Use get_notes_by_tag
+
+WORKFLOW:
+1. Construct query with OR logic + synonyms
+2. Examine results (IDs and titles)
+3. Use get_note for full content
+4. If zero results, try broader terms or wildcards
+
+STRATEGIC GUIDANCE:
+
+1. Notebook Selection (Crucial):
+   - Joplin has NO default notebook. You MUST provide a 'notebookId' when creating notes.
+   - User provided a name? Use 'joplin.notebooks.listNotebooks()' to find the ID first.
+   - User didn't specify? Ask them or check 'listNotebooks()' to find a sensible default.
+
 AVAILABLE API (on 'joplin' object):
 
 // NOTEBOOKS
@@ -139,8 +184,25 @@ return "Updated due dates";
             textResult = result;
           } else if (result === undefined) {
             textResult = 'Script executed successfully (no return value).';
+          } else if (
+            Array.isArray(result) &&
+            result.every(
+              (item: unknown) =>
+                typeof item === 'object' &&
+                item !== null &&
+                'id' in item &&
+                'title' in item,
+            )
+          ) {
+            // Assume it's an array of Joplin-like objects (e.g., notes, notebooks, tags)
+            textResult =
+              `Found ${result.length} items:\n` +
+              (result as Array<{ id: string; title: string }>)
+                .map((item) => `- ${item.title} (ID: ${item.id})`)
+                .join('\n');
           } else {
-            textResult = JSON.stringify(result, null, 2);
+            // Fallback for other complex objects, use compact JSON
+            textResult = JSON.stringify(result);
           }
 
           return {
@@ -152,11 +214,23 @@ return "Updated due dates";
             ],
           };
         } catch (error) {
+          const errorMessage =
+            error instanceof Error ? error.message : String(error);
+          let finalMessage = `Script Execution Error: ${errorMessage}`;
+
+          if (
+            errorMessage.includes('ECONNREFUSED') ||
+            errorMessage.includes('fetch failed')
+          ) {
+            finalMessage +=
+              '\n\nCould not connect to Joplin. Please check:\n1. Is the Joplin app running?\n2. Is the Web Clipper enabled in settings?';
+          }
+
           return {
             content: [
               {
                 type: 'text',
-                text: `Script Execution Error: ${error instanceof Error ? error.message : String(error)}`,
+                text: finalMessage,
               },
             ],
             isError: true,
