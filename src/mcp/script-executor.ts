@@ -37,6 +37,9 @@ export class ScriptExecutor {
       clearTimeout,
       setInterval,
       clearInterval,
+      // Explicitly block dangerous globals to prevent data exfiltration
+      fetch: undefined,
+      process: undefined,
     };
 
     const context = vm.createContext(contextObj);
