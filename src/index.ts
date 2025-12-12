@@ -150,9 +150,8 @@ return "Updated due dates";
 
           let finalContent = textResult;
           if (logs.length > 0) {
-              finalContent += `\n\n--- Script Logs ---\n${logs.join('\n')}`;
+            finalContent += `\n\n--- Script Logs ---\n${logs.join('\n')}`;
           }
-
 
           return {
             content: [
@@ -163,23 +162,23 @@ return "Updated due dates";
             ],
           };
         } catch (error) {
-            const errorObj = error as { logs?: string[], message?: string };
-            const errorLogs = errorObj.logs || [];
-            const errorOutput = `Script Execution Error: ${error instanceof Error ? error.message : String(error)}`;
-            let finalErrorContent = errorOutput;
-            if (errorLogs.length > 0) {
-                finalErrorContent += `\n\n--- Script Logs ---\n${errorLogs.join('\n')}`;
-            }
+          const errorObj = error as { logs?: string[]; message?: string };
+          const errorLogs = errorObj.logs || [];
+          const errorOutput = `Script Execution Error: ${error instanceof Error ? error.message : String(error)}`;
+          let finalErrorContent = errorOutput;
+          if (errorLogs.length > 0) {
+            finalErrorContent += `\n\n--- Script Logs ---\n${errorLogs.join('\n')}`;
+          }
 
-            return {
-                content: [
-                    {
-                        type: 'text',
-                        text: finalErrorContent,
-                    },
-                ],
-                isError: true,
-            };
+          return {
+            content: [
+              {
+                type: 'text',
+                text: finalErrorContent,
+              },
+            ],
+            isError: true,
+          };
         }
       }
 
@@ -194,13 +193,26 @@ return "Updated due dates";
 
     process.on('SIGINT', async () => {
       await this.server.close();
-      // qjsInstance doesn't have a dispose method, contexts do. 
+      // qjsInstance doesn't have a dispose method, contexts do.
       // The module itself usually doesn't need explicit disposal in this context unless using a variant that does.
       process.exit(0);
     });
   }
 
   async run() {
+    // Verify connection to Joplin
+    try {
+      await this.apiClient.ping();
+      console.error('Successfully connected to Joplin API.');
+    } catch (error) {
+      console.error(
+        'Failed to connect to Joplin API:',
+        error instanceof Error ? error.message : String(error),
+      );
+      // We don't exit here, allowing the server to start even if Joplin is not immediately available
+      // (e.g., if the user starts Joplin later)
+    }
+
     const transport = new StdioServerTransport();
     await this.server.connect(transport);
     console.error('Joplin MCP server (Script Mode) running on stdio');
