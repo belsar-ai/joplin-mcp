@@ -112,15 +112,27 @@ return await joplin.notebooks.getNotebookTree(nb.id);
 
 The tree output is self-explanatory. Just respond "Done." - no summary, no intermediate steps.
 
-CRITICAL - LIST ALL NOTEBOOKS:
-When user asks to see all notebooks, ALWAYS use getAllNotebooksTree(). Triggers:
+CRITICAL - LIST ALL NOTEBOOKS (folders only):
+When user asks to see all notebooks/folders, use getAllNotebooksTree(). Triggers:
 - "show me all notebooks"
 - "list my notebooks"
 - "what notebooks do I have"
 
-Example (with exclusions):
-return await joplin.notebooks.getAllNotebooksTree(['archive', 'todo']);
+Example:
+return await joplin.notebooks.getAllNotebooksTree({ exclude: ['archive'] });
 
+The tree output is self-explanatory. Just respond "Done." - no summary, no intermediate steps.
+
+CRITICAL - SHOW MY NOTES TREE (notebooks + notes):
+When user asks to see their notes tree, ALWAYS use getScopedTree(). Triggers:
+- "show my notes tree"
+- "show all my notes"
+- "show my notes"
+
+Example:
+return await joplin.notebooks.getScopedTree();
+
+This shows all scoped notebooks WITH their notes. Respects joplin-mcp.toml scope if present.
 The tree output is self-explanatory. Just respond "Done." - no summary, no intermediate steps.
 
 AVAILABLE API (on 'joplin' object):
@@ -132,7 +144,8 @@ joplin.notebooks.createNotebook(title, parentId?)
 joplin.notebooks.updateNotebook(id, { title, parent_id })
 joplin.notebooks.deleteNotebook(id)
 joplin.notebooks.getNotebookTree(notebookId, depth?) // Returns formatted tree (📁/📝). depth=undefined for full recursion, 1 for direct notes only
-joplin.notebooks.getAllNotebooksTree(exclude?) // Returns formatted tree of ALL notebooks (📁 only). exclude=['archive'] to filter
+joplin.notebooks.getAllNotebooksTree({ exclude? }) // Returns formatted tree of notebooks (📁 only). Respects joplin-mcp.toml scope
+joplin.notebooks.getScopedTree({ exclude?, depth? }) // Returns formatted tree of notebooks WITH notes (📁/📝). Respects scope
 
 // NOTES
 joplin.notes.listAllNotes(fields?, includeDeleted?, orderBy?, orderDir?, limit?)

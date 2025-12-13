@@ -1,0 +1,5 @@
+[defaults]
+notebook = "Notes"
+
+[scope]
+notebooks = ["Notes", "Software"]
