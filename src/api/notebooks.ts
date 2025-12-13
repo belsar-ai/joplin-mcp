@@ -87,4 +87,32 @@ export class NotebooksApi extends HttpClient {
   async deleteNotebook(notebookId: string): Promise<void> {
     await this.request('DELETE', `/folders/${notebookId}`);
   }
+
+  /**
+   * Get a visual tree representation of a notebook and all its contents.
+   * Returns a formatted string with notebooks (📁) and notes (📝) indented hierarchically.
+   */
+  async getNotebookTree(notebookId: string): Promise<string> {
+    const allNotebooks = await this.listNotebooks('id,title,parent_id');
+    const rootNotebook = allNotebooks.find((nb) => nb.id === notebookId);
+    if (!rootNotebook) {
+      throw new Error(`Notebook not found: ${notebookId}`);
+    }
+
+    const buildTree = async (nbId: string, indent: string): Promise<string> => {
+      let result = '';
+      const notes = await this.getNotebookNotes(nbId, 'title');
+      for (const note of notes) {
+        result += `${indent}📝 ${note.title}\n`;
+      }
+      const children = allNotebooks.filter((nb) => nb.parent_id === nbId);
+      for (const child of children) {
+        result += `${indent}📁 ${child.title}\n`;
+        result += await buildTree(child.id, indent + '  ');
+      }
+      return result;
+    };
+
+    return `📁 ${rootNotebook.title}\n` + (await buildTree(notebookId, '  '));
+  }
 }

@@ -98,6 +98,11 @@ STRATEGIC GUIDANCE:
    - User provided a name? Use 'joplin.notebooks.listNotebooks()' to find the ID first.
    - User didn't specify? Ask them or check 'listNotebooks()' to find a sensible default.
 
+2. Notebook Tree/Layout Requests ("show me the layout/tree/structure of X notebook"):
+   - Use getNotebookTree(notebookId) - returns a pre-formatted recursive tree string.
+   - Example: const nb = (await joplin.notebooks.listNotebooks()).find(n => n.title === 'Belsar');
+             return await joplin.notebooks.getNotebookTree(nb.id);
+
 AVAILABLE API (on 'joplin' object):
 
 // NOTEBOOKS
@@ -107,6 +112,7 @@ joplin.notebooks.createNotebook(title, parentId?)
 joplin.notebooks.updateNotebook(id, { title, parent_id })
 joplin.notebooks.deleteNotebook(id)
 joplin.notebooks.getNotebookNotes(notebookId)
+joplin.notebooks.getNotebookTree(notebookId) // Returns formatted tree string (📁/📝)
 
 // NOTES
 joplin.notes.listAllNotes(fields?, includeDeleted?, orderBy?, orderDir?, limit?)
