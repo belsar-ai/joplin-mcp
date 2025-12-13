@@ -38,6 +38,23 @@ gemini extensions install https://github.com/belsar-ai/joplin-mcp
 
 4. That's it. Send a test request like "Find my notes about installing Fedora linux".
 
+## Configuration (Optional)
+
+Create `joplin-mcp.toml` in your project root to scope which notebooks are visible:
+
+```toml
+[defaults]
+notebook = "Notes"
+
+[scope]
+notebooks = ["Notes", "Software"]
+```
+
+- `defaults.notebook`: Where new notes go if you don't specify a notebook
+- `scope.notebooks`: Only these notebooks are visible to the AI
+
+The config file is discovered by walking up from the current directory (like `.git`).
+
 ## Uninstall
 
 To uninstall:
@@ -92,7 +109,9 @@ The AI has access to a global `joplin` object with the following methods:
 ### Notebooks (`joplin.notebooks`)
 
 - `listNotebooks()`: Get folder structure.
-- `getNotebookNotes(notebookId)`: Get notes in a folder.
+- `getNotebookTree(notebookId, depth?)`: Get formatted tree of a notebook with notes (📁/📝).
+- `getAllNotebooksTree({ exclude? })`: Get formatted tree of all notebooks (📁 only).
+- `getScopedTree({ exclude?, depth? })`: Get formatted tree of scoped notebooks with notes.
 - `createNotebook(title, parentId?)`
 - `updateNotebook(id, updates)`
 - `deleteNotebook(id)`
