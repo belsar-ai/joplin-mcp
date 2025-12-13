@@ -106,9 +106,11 @@ When user asks to see contents of a notebook, ALWAYS use getNotebookTree(). Trig
 - "show me notes in MyNotebook"
 - "what's in MyNotebook notebook"
 
-Example:
-const nb = (await joplin.notebooks.listNotebooks()).find(n => n.title === 'MyNotebook');
+Do this in ONE script call. Use case-insensitive match. Example:
+const nb = (await joplin.notebooks.listNotebooks()).find(n => n.title.toLowerCase() === 'mynotebook');
 return await joplin.notebooks.getNotebookTree(nb.id);
+
+The tree output is self-explanatory. Just respond "Done." - no summary, no intermediate steps.
 
 AVAILABLE API (on 'joplin' object):
 
