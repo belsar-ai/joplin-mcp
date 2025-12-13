@@ -5,7 +5,18 @@ Model Context Protocol (MCP) server for the [Joplin](https://joplinapp.org/) not
 Designed by belsar.ai to be easy to install & enjoyable to use.
 
 ## Video
+
 https://www.youtube.com/watch?v=B3qJa7ycqNM&t=6s
+
+## Architecture: Script Mode
+
+This MCP server uses a **Script Execution** architecture. Instead of exposing 30+ restricted tools, it exposes a single, powerful tool: `execute_joplin_script`.
+
+This allows the AI to write and execute secure JavaScript/TypeScript code to interact with your Joplin instance. This enables:
+
+- **Complex Workflows:** "Find all notes tagged 'work' and append a checklist to them" (1 turn vs. 50 turns).
+- **Data Processing:** Filter, sort, and aggregate data using standard JS array methods.
+- **Efficiency:** Drastically reduces context usage and latency.
 
 ## Quick Start
 
@@ -27,6 +38,23 @@ gemini extensions install https://github.com/belsar-ai/joplin-mcp
 
 4. That's it. Send a test request like "Find my notes about installing Fedora linux".
 
+## Configuration (Optional)
+
+Create `joplin-mcp.toml` in your project root to scope which notebooks are visible:
+
+```toml
+[defaults]
+notebook = "Notes"
+
+[scope]
+notebooks = ["Notes", "Software"]
+```
+
+- `defaults.notebook`: Where new notes go if you don't specify a notebook
+- `scope.notebooks`: Only these notebooks are visible to the AI
+
+The config file is discovered by walking up from the current directory (like `.git`).
+
 ## Uninstall
 
 To uninstall:
@@ -45,12 +73,10 @@ gemini extensions uninstall joplin-mcp
 
 ## Example Usage
 
-```
-Find my notes about installing Arch Linux.
-```
+The AI can now handle complex requests in a single shot:
 
 ```
-Did you find any outdated info in my Arch Installation note?
+Find my notes about installing Arch Linux.
 ```
 
 ```
@@ -65,15 +91,38 @@ Show me all notes in my Work Projects notebook.
 Make a new note with a Mermaid diagram showing how a bill is passed on Capitol Hill.
 ```
 
-## Available Operations
+## Available API (Script Context)
 
-| Category    | Operations                                                                                                                                                                  |
-| ----------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Notebooks   | List notebooks<br>Create notebook<br>Get notebook notes<br>Update notebook<br>Delete notebook<br>Get notebook by ID<br>Move note to notebook                                |
-| Notes       | List all notes<br>Search notes<br>Get note<br>Create note<br>Update note<br>Append to note<br>Prepend to note<br>Delete note                                                |
-| Tags        | Add tags to note<br>Remove tags from note<br>List tags<br>Rename tag<br>Delete tag<br>Get tag by ID<br>Get notes by tag                                                     |
-| Attachments | List all resources<br>Get resource metadata<br>Get note attachments<br>Get resource notes<br>Download attachment<br>Upload attachment<br>Update resource<br>Delete resource |
-| Revisions   | List all revisions<br>Get revision                                                                                                                                          |
+The AI has access to a global `joplin` object with the following methods:
+
+### Notes (`joplin.notes`)
+
+- `searchNotes(query: string)`: Smart search with "any:1" logic.
+- `listAllNotes(fields?, ...)`: Get all notes.
+- `getNote(id)`: Get full note content.
+- `createNote(title, body, notebookId, ...)`: Create a new note.
+- `updateNote(id, updates)`: Update properties or body.
+- `appendToNote(id, text)`: Add text to the end.
+- `prependToNote(id, text)`: Add text to the beginning.
+- `deleteNote(id)`: Move to trash.
+
+### Notebooks (`joplin.notebooks`)
+
+- `listNotebooks()`: Get folder structure.
+- `getNotebookTree(notebookId, depth?)`: Get formatted tree of a notebook with notes (📁/📝).
+- `getAllNotebooksTree({ exclude? })`: Get formatted tree of all notebooks (📁 only).
+- `getScopedTree({ exclude?, depth? })`: Get formatted tree of scoped notebooks with notes.
+- `createNotebook(title, parentId?)`
+- `updateNotebook(id, updates)`
+- `deleteNotebook(id)`
+
+### Tags (`joplin.tags`)
+
+- `listTags()`
+- `getNotesByTagName(tagName)`: Find notes by tag name.
+- `addTagsToNote(noteId, tags)`: e.g., "urgent, work"
+- `removeTagsFromNote(noteId, tags)`
+- `createTag(title)`
 
 ## Troubleshooting
 

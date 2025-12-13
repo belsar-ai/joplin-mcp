@@ -3,8 +3,6 @@ import { HttpClient } from './http-client.js';
 import { NotebooksApi } from './notebooks.js';
 import { NotesApi } from './notes.js';
 import { TagsApi } from './tags.js';
-import { ResourcesApi } from './resources.js';
-import { RevisionsApi } from './revisions.js';
 
 /**
  * Main Joplin API client that aggregates all domain-specific APIs
@@ -14,8 +12,6 @@ export class JoplinApiClient extends HttpClient {
   public readonly notebooks: NotebooksApi;
   public readonly notes: NotesApi;
   public readonly tags: TagsApi;
-  public readonly resources: ResourcesApi;
-  public readonly revisions: RevisionsApi;
 
   constructor() {
     // Initialize base URL and token
@@ -53,8 +49,6 @@ export class JoplinApiClient extends HttpClient {
     this.notebooks = new NotebooksApi(baseUrl, token);
     this.notes = new NotesApi(baseUrl, token);
     this.tags = new TagsApi(baseUrl, token);
-    this.resources = new ResourcesApi(baseUrl, token);
-    this.revisions = new RevisionsApi(baseUrl, token);
 
     // Wire up cross-domain dependencies
     this.notes.setTagsApi(this.tags);

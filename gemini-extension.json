@@ -4,7 +4,7 @@
   "mcpServers": {
     "joplin": {
       "command": "node",
-      "args": ["${extensionPath}/dist/index.js"]
+      "args": ["${extensionPath}/dist/cli.js"]
     }
   }
 }
