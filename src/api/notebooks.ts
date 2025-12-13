@@ -124,4 +124,33 @@ export class NotebooksApi extends HttpClient {
       `📁 ${rootNotebook.title}\n` + (await buildTree(notebookId, '  ', 1))
     );
   }
+
+  /**
+   * Get a visual tree of all notebooks (without notes).
+   * Returns a formatted string showing notebook hierarchy with 📁 icons.
+   * @param exclude - Optional array of notebook titles to exclude (case-insensitive)
+   */
+  async getAllNotebooksTree(exclude?: string[]): Promise<string> {
+    const allNotebooks = await this.listNotebooks('id,title,parent_id');
+    const excludeLower = (exclude || []).map((e) => e.toLowerCase());
+
+    const buildTree = (parentId: string | null, indent: string): string => {
+      let result = '';
+      const children = allNotebooks.filter((nb) => {
+        const matchesParent =
+          parentId === null ? !nb.parent_id : nb.parent_id === parentId;
+        const excluded = excludeLower.some((ex) =>
+          nb.title.toLowerCase().includes(ex),
+        );
+        return matchesParent && !excluded;
+      });
+      for (const child of children) {
+        result += `${indent}📁 ${child.title}\n`;
+        result += buildTree(child.id, indent + '  ');
+      }
+      return result;
+    };
+
+    return buildTree(null, '');
+  }
 }
