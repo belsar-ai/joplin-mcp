@@ -89,30 +89,39 @@ export class NotebooksApi extends HttpClient {
   }
 
   /**
-   * Get a visual tree representation of a notebook and all its contents.
+   * Get a visual tree representation of a notebook and its contents.
    * Returns a formatted string with notebooks (📁) and notes (📝) indented hierarchically.
+   * @param depth - How deep to recurse. undefined = full depth, 1 = direct notes only, 2 = notes + one level of subnotebooks, etc.
    */
-  async getNotebookTree(notebookId: string): Promise<string> {
+  async getNotebookTree(notebookId: string, depth?: number): Promise<string> {
     const allNotebooks = await this.listNotebooks('id,title,parent_id');
     const rootNotebook = allNotebooks.find((nb) => nb.id === notebookId);
     if (!rootNotebook) {
       throw new Error(`Notebook not found: ${notebookId}`);
     }
 
-    const buildTree = async (nbId: string, indent: string): Promise<string> => {
+    const buildTree = async (
+      nbId: string,
+      indent: string,
+      currentDepth: number,
+    ): Promise<string> => {
       let result = '';
       const notes = await this.getNotebookNotes(nbId, 'title');
       for (const note of notes) {
         result += `${indent}📝 ${note.title}\n`;
       }
-      const children = allNotebooks.filter((nb) => nb.parent_id === nbId);
-      for (const child of children) {
-        result += `${indent}📁 ${child.title}\n`;
-        result += await buildTree(child.id, indent + '  ');
+      if (depth === undefined || currentDepth < depth) {
+        const children = allNotebooks.filter((nb) => nb.parent_id === nbId);
+        for (const child of children) {
+          result += `${indent}📁 ${child.title}\n`;
+          result += await buildTree(child.id, indent + '  ', currentDepth + 1);
+        }
       }
       return result;
     };
 
-    return `📁 ${rootNotebook.title}\n` + (await buildTree(notebookId, '  '));
+    return (
+      `📁 ${rootNotebook.title}\n` + (await buildTree(notebookId, '  ', 1))
+    );
   }
 }

@@ -81,8 +81,8 @@ WHEN TO USE:
 - Searching by keywords or concepts
 
 WHEN NOT TO USE:
-- For "all notes" → Use list_all_notes
-- Specific notebook → Use get_notebook_notes
+- For "all notes" → Use listAllNotes
+- Specific notebook → Use getNotebookTree (see CRITICAL section below)
 - Specific tag → Use get_notes_by_tag
 
 WORKFLOW:
@@ -98,10 +98,17 @@ STRATEGIC GUIDANCE:
    - User provided a name? Use 'joplin.notebooks.listNotebooks()' to find the ID first.
    - User didn't specify? Ask them or check 'listNotebooks()' to find a sensible default.
 
-2. Notebook Tree/Layout Requests ("show me the layout/tree/structure of X notebook"):
-   - Use getNotebookTree(notebookId) - returns a pre-formatted recursive tree string.
-   - Example: const nb = (await joplin.notebooks.listNotebooks()).find(n => n.title === 'Belsar');
-             return await joplin.notebooks.getNotebookTree(nb.id);
+CRITICAL - NOTEBOOK CONTENTS:
+When user asks to see contents of a notebook, ALWAYS use getNotebookTree(). Triggers:
+- "show me the layout of MyNotebook"
+- "show me the tree of MyNotebook"
+- "show me the structure of MyNotebook"
+- "show me notes in MyNotebook"
+- "what's in MyNotebook notebook"
+
+Example:
+const nb = (await joplin.notebooks.listNotebooks()).find(n => n.title === 'MyNotebook');
+return await joplin.notebooks.getNotebookTree(nb.id);
 
 AVAILABLE API (on 'joplin' object):
 
@@ -111,8 +118,7 @@ joplin.notebooks.getNotebook(id)
 joplin.notebooks.createNotebook(title, parentId?)
 joplin.notebooks.updateNotebook(id, { title, parent_id })
 joplin.notebooks.deleteNotebook(id)
-joplin.notebooks.getNotebookNotes(notebookId)
-joplin.notebooks.getNotebookTree(notebookId) // Returns formatted tree string (📁/📝)
+joplin.notebooks.getNotebookTree(notebookId, depth?) // Returns formatted tree (📁/📝). depth=undefined for full recursion, 1 for direct notes only
 
 // NOTES
 joplin.notes.listAllNotes(fields?, includeDeleted?, orderBy?, orderDir?, limit?)
