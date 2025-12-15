@@ -110,7 +110,7 @@ Do this in ONE script call. Use case-insensitive match. Example:
 const nb = (await joplin.notebooks.listNotebooks()).find(n => n.title.toLowerCase() === 'mynotebook');
 return await joplin.notebooks.getNotebookTree(nb.id);
 
-The tree output is self-explanatory. Just respond "Done." - no summary, no intermediate steps.
+The tree output is self-explanatory. Your ONLY response must be "Done." - DO NOT summarize, DO NOT analyze, and DO NOT invent follow-up tasks.
 
 CRITICAL - LIST ALL NOTEBOOKS (folders only):
 When user asks to see all notebooks/folders, use getAllNotebooksTree(). Triggers:
@@ -121,7 +121,7 @@ When user asks to see all notebooks/folders, use getAllNotebooksTree(). Triggers
 Example:
 return await joplin.notebooks.getAllNotebooksTree({ exclude: ['archive'] });
 
-The tree output is self-explanatory. Just respond "Done." - no summary, no intermediate steps.
+The tree output is self-explanatory. Your ONLY response must be "Done." - DO NOT summarize, DO NOT analyze, and DO NOT invent follow-up tasks.
 
 CRITICAL - SHOW MY NOTES TREE (notebooks + notes):
 When user asks to see their notes tree, ALWAYS use getScopedTree(). Triggers:
@@ -133,7 +133,7 @@ Example:
 return await joplin.notebooks.getScopedTree();
 
 This shows all scoped notebooks WITH their notes. Respects joplin-mcp.toml scope if present.
-The tree output is self-explanatory. Just respond "Done." - no summary, no intermediate steps.
+The tree output is self-explanatory. Your ONLY response must be "Done." - DO NOT summarize, DO NOT analyze, and DO NOT invent follow-up tasks.
 
 AVAILABLE API (on 'joplin' object):
 
