@@ -21,7 +21,7 @@ function findConfigFile(startDir: string): string | null {
   const root = path.parse(currentDir).root;
 
   while (currentDir !== root) {
-    const configPath = path.join(currentDir, CONFIG_FILENAME);
+    const configPath = path.join(currentDir, '.mcp-config', CONFIG_FILENAME);
     if (fs.existsSync(configPath)) {
       return configPath;
     }
@@ -29,7 +29,7 @@ function findConfigFile(startDir: string): string | null {
   }
 
   // Check root as well
-  const rootConfig = path.join(root, CONFIG_FILENAME);
+  const rootConfig = path.join(root, '.mcp-config', CONFIG_FILENAME);
   if (fs.existsSync(rootConfig)) {
     return rootConfig;
   }

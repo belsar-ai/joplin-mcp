@@ -40,7 +40,7 @@ gemini extensions install https://github.com/belsar-ai/joplin-mcp
 
 ## Configuration (Optional)
 
-Create `joplin-mcp.toml` in your project root to scope which notebooks are visible:
+Create `.mcp-config/joplin-mcp.toml` in your project root to scope which notebooks are visible:
 
 ```toml
 [defaults]
