@@ -1,0 +1,6 @@
+[defaults]
+notebook = "Keith Notes"
+
+[scope]
+notebooks = ["Belsar", "Keith Notes", "Kevin Notes"]
+
