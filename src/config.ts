@@ -45,15 +45,14 @@ let cachedConfigPath: string | null = null;
  * Returns empty config if no file found.
  */
 export function loadConfig(forceReload = false): JoplinMcpConfig {
-  if (cachedConfig && !forceReload) {
+  if (cachedConfig && !forceReload && Object.keys(cachedConfig).length > 0) {
     return cachedConfig;
   }
 
   const configPath = findConfigFile(process.cwd());
   if (!configPath) {
-    cachedConfig = {};
-    cachedConfigPath = null;
-    return cachedConfig;
+    // Don't cache empty config indefinitely during development/startup
+    return {};
   }
 
   try {
@@ -63,9 +62,7 @@ export function loadConfig(forceReload = false): JoplinMcpConfig {
     return cachedConfig;
   } catch (error) {
     console.error(`Failed to parse ${configPath}:`, error);
-    cachedConfig = {};
-    cachedConfigPath = null;
-    return cachedConfig;
+    return {};
   }
 }
 
