@@ -10,10 +10,29 @@ export class NotesApi extends HttpClient {
     addTagsToNote: (noteId: string, tagNames: string) => Promise<void>;
   };
 
+  // Reference to notebooks API for scope enforcement
+  private notebooksApi?: {
+    getInScopeNotebookIds: () => Promise<Set<string> | null>;
+  };
+
   setTagsApi(tagsApi: {
     addTagsToNote: (noteId: string, tagNames: string) => Promise<void>;
   }) {
     this.tagsApi = tagsApi;
+  }
+
+  setNotebooksApi(notebooksApi: {
+    getInScopeNotebookIds: () => Promise<Set<string> | null>;
+  }) {
+    this.notebooksApi = notebooksApi;
+  }
+
+  private async filterNotesByScope(notes: JoplinNote[]): Promise<JoplinNote[]> {
+    if (!this.notebooksApi) return notes;
+    const inScopeIds = await this.notebooksApi.getInScopeNotebookIds();
+    if (!inScopeIds) return notes;
+
+    return notes.filter((note) => inScopeIds.has(note.parent_id));
   }
 
   async listAllNotes(
@@ -38,13 +57,18 @@ export class NotesApi extends HttpClient {
       endpoint += `&order_dir=${orderDir}`;
     }
 
-    return this.paginatedRequest(endpoint, limit);
+    const results = (await this.paginatedRequest(
+      endpoint,
+      limit,
+    )) as JoplinNote[];
+    return this.filterNotesByScope(results);
   }
 
   async searchNotes(query: string, type?: string): Promise<JoplinNote[]> {
     let url = `/search?query=${encodeURIComponent(query)}`;
     if (type) url += `&type=${type}`;
-    return this.paginatedRequest(url);
+    const results = (await this.paginatedRequest(url)) as JoplinNote[];
+    return this.filterNotesByScope(results);
   }
 
   async getNote(
@@ -54,13 +78,32 @@ export class NotesApi extends HttpClient {
     const fieldsParam =
       fields ||
       'id,title,body,parent_id,created_time,updated_time,user_created_time,user_updated_time,is_todo,todo_completed';
-    const [note, tags] = await Promise.all([
-      this.request('GET', `/notes/${noteId}?fields=${fieldsParam}`),
-      this.paginatedRequest(`/notes/${noteId}/tags`), // Fetch tags with pagination
-    ]);
+
+    const wantsTags = fields?.split(',').includes('tags');
+    const noteFields = fieldsParam
+      .split(',')
+      .filter((f) => f !== 'tags')
+      .join(',');
+
+    const [note, tags] = (await Promise.all([
+      this.request('GET', `/notes/${noteId}?fields=${noteFields}`),
+      wantsTags
+        ? this.paginatedRequest(`/notes/${noteId}/tags`)
+        : Promise.resolve(undefined),
+    ])) as [JoplinNote, JoplinTag[] | undefined];
+
+    // Check scope
+    if (this.notebooksApi) {
+      const inScopeIds = await this.notebooksApi.getInScopeNotebookIds();
+      if (inScopeIds && !inScopeIds.has(note.parent_id)) {
+        throw new Error(
+          `Permission denied: Note ${noteId} belongs to an out-of-scope notebook.`,
+        );
+      }
+    }
 
     // Combine the results
-    return { ...(note as JoplinNote), tags: tags as JoplinTag[] };
+    return { ...note, ...(tags ? { tags } : {}) };
   }
 
   async createNote(
@@ -72,6 +115,15 @@ export class NotesApi extends HttpClient {
     todoDue?: number,
     todoCompleted?: number,
   ): Promise<JoplinNote> {
+    if (notebookId && this.notebooksApi) {
+      const inScopeIds = await this.notebooksApi.getInScopeNotebookIds();
+      if (inScopeIds && !inScopeIds.has(notebookId)) {
+        throw new Error(
+          `Permission denied: Target notebook ${notebookId} is out of scope.`,
+        );
+      }
+    }
+
     const noteData: Record<string, unknown> = { title, body };
     if (notebookId) noteData.parent_id = notebookId;
     if (isTodo !== undefined) noteData.is_todo = isTodo;
@@ -93,6 +145,19 @@ export class NotesApi extends HttpClient {
     noteId: string,
     updates: Record<string, unknown>,
   ): Promise<JoplinNote> {
+    // If moving to a new notebook, check scope
+    if (updates.parent_id && this.notebooksApi) {
+      const inScopeIds = await this.notebooksApi.getInScopeNotebookIds();
+      if (inScopeIds && !inScopeIds.has(updates.parent_id as string)) {
+        throw new Error(
+          `Permission denied: Target notebook ${updates.parent_id} is out of scope.`,
+        );
+      }
+    }
+
+    // Verify current note is in scope
+    await this.getNote(noteId, 'id,parent_id');
+
     return this.request(
       'PUT',
       `/notes/${noteId}`,
@@ -101,18 +166,21 @@ export class NotesApi extends HttpClient {
   }
 
   async appendToNote(noteId: string, content: string): Promise<JoplinNote> {
-    const note = await this.getNote(noteId, 'id,body');
+    const note = await this.getNote(noteId, 'id,body,parent_id');
     const updatedBody = note.body + '\n\n' + content;
     return this.updateNote(noteId, { body: updatedBody });
   }
 
   async prependToNote(noteId: string, content: string): Promise<JoplinNote> {
-    const note = await this.getNote(noteId, 'id,body');
+    const note = await this.getNote(noteId, 'id,body,parent_id');
     const updatedBody = content + '\n\n' + note.body;
     return this.updateNote(noteId, { body: updatedBody });
   }
 
   async deleteNote(noteId: string, permanent = false): Promise<void> {
+    // Verify current note is in scope
+    await this.getNote(noteId, 'id,parent_id');
+
     const url = permanent ? `/notes/${noteId}?permanent=1` : `/notes/${noteId}`;
     await this.request('DELETE', url);
   }

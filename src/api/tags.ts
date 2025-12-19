@@ -8,12 +8,33 @@ export class TagsApi extends HttpClient {
   // Reference to notes API for cross-domain operations (search)
   private notesApi?: {
     searchNotes: (query: string, type?: string) => Promise<unknown>;
+    getNote: (noteId: string, fields?: string) => Promise<JoplinNote>;
+  };
+
+  // Reference to notebooks API for scope enforcement
+  private notebooksApi?: {
+    getInScopeNotebookIds: () => Promise<Set<string> | null>;
   };
 
   setNotesApi(notesApi: {
     searchNotes: (query: string, type?: string) => Promise<unknown>;
+    getNote: (noteId: string, fields?: string) => Promise<JoplinNote>;
   }) {
     this.notesApi = notesApi;
+  }
+
+  setNotebooksApi(notebooksApi: {
+    getInScopeNotebookIds: () => Promise<Set<string> | null>;
+  }) {
+    this.notebooksApi = notebooksApi;
+  }
+
+  private async filterNotesByScope(notes: JoplinNote[]): Promise<JoplinNote[]> {
+    if (!this.notebooksApi) return notes;
+    const inScopeIds = await this.notebooksApi.getInScopeNotebookIds();
+    if (!inScopeIds) return notes;
+
+    return notes.filter((note) => inScopeIds.has(note.parent_id));
   }
 
   /**
@@ -50,6 +71,13 @@ export class TagsApi extends HttpClient {
    * Tags will be created if they don't exist
    */
   async addTagsToNote(noteId: string, tagNames: string): Promise<void> {
+    if (!this.notesApi) {
+      throw new Error('NotesApi not set');
+    }
+
+    // Verify current note is in scope
+    await this.notesApi.getNote(noteId, 'id,parent_id');
+
     // Parse comma-separated tags
     const tags = tagNames
       .split(',')
@@ -71,6 +99,9 @@ export class TagsApi extends HttpClient {
     if (!this.notesApi) {
       throw new Error('NotesApi not set');
     }
+
+    // Verify current note is in scope
+    await this.notesApi.getNote(noteId, 'id,parent_id');
 
     // Parse comma-separated tags
     const tags = tagNames
@@ -195,7 +226,11 @@ export class TagsApi extends HttpClient {
     if (orderDir) {
       endpoint += `&order_dir=${orderDir}`;
     }
-    return this.paginatedRequest(endpoint, limit);
+    const results = (await this.paginatedRequest(
+      endpoint,
+      limit,
+    )) as JoplinNote[];
+    return this.filterNotesByScope(results);
   }
 
   /**

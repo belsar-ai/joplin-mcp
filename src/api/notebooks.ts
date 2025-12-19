@@ -6,6 +6,53 @@ import { getScopedNotebooks, hasNotebookScope } from '../config.js';
  * Notebook (Folder) operations
  */
 export class NotebooksApi extends HttpClient {
+  private cachedInScopeIds: Set<string> | null | undefined = undefined;
+
+  /**
+   * Get all notebook IDs that are within the configured scope.
+   * Returns null if no scope is defined (meaning everything is in scope).
+   */
+  async getInScopeNotebookIds(): Promise<Set<string> | null> {
+    if (this.cachedInScopeIds !== undefined) {
+      return this.cachedInScopeIds;
+    }
+
+    if (!hasNotebookScope()) {
+      this.cachedInScopeIds = null;
+      return null;
+    }
+
+    // We use a internal-only list here to avoid recursion if we scope listNotebooks later
+    const allNotebooks = (await this.paginatedRequest(
+      '/folders?fields=id,title,parent_id',
+    )) as JoplinNotebook[];
+
+    const scopedNotebooks = getScopedNotebooks();
+    const inScopeIds = new Set<string>();
+
+    const findNotebookAndChildren = (nb: JoplinNotebook) => {
+      inScopeIds.add(nb.id);
+      const addChildren = (parentId: string) => {
+        for (const child of allNotebooks.filter(
+          (n) => n.parent_id === parentId,
+        )) {
+          inScopeIds.add(child.id);
+          addChildren(child.id);
+        }
+      };
+      addChildren(nb.id);
+    };
+
+    for (const nb of allNotebooks) {
+      if (scopedNotebooks.includes(nb.title.toLowerCase())) {
+        findNotebookAndChildren(nb);
+      }
+    }
+
+    this.cachedInScopeIds = inScopeIds;
+    return inScopeIds;
+  }
+
   async listNotebooks(
     fields?: string,
     orderBy?: string,
@@ -22,13 +69,28 @@ export class NotebooksApi extends HttpClient {
     if (orderDir) {
       endpoint += `&order_dir=${orderDir}`;
     }
-    return this.paginatedRequest(endpoint, limit);
+    const results = (await this.paginatedRequest(
+      endpoint,
+      limit,
+    )) as JoplinNotebook[];
+
+    const inScopeIds = await this.getInScopeNotebookIds();
+    if (!inScopeIds) return results;
+
+    return results.filter((nb) => inScopeIds.has(nb.id));
   }
 
   async getNotebook(
     notebookId: string,
     fields?: string,
   ): Promise<JoplinNotebook> {
+    const inScopeIds = await this.getInScopeNotebookIds();
+    if (inScopeIds && !inScopeIds.has(notebookId)) {
+      throw new Error(
+        `Permission denied: Notebook ${notebookId} is out of scope.`,
+      );
+    }
+
     const fieldsParam =
       fields ||
       'id,title,parent_id,created_time,updated_time,user_created_time,user_updated_time';
@@ -42,9 +104,24 @@ export class NotebooksApi extends HttpClient {
     title: string,
     parentId?: string,
   ): Promise<JoplinNotebook> {
+    if (parentId) {
+      const inScopeIds = await this.getInScopeNotebookIds();
+      if (inScopeIds && !inScopeIds.has(parentId)) {
+        throw new Error(
+          `Permission denied: Parent notebook ${parentId} is out of scope.`,
+        );
+      }
+    }
+
     const body: Record<string, unknown> = { title };
     if (parentId) body.parent_id = parentId;
-    return this.request('POST', '/folders', body) as Promise<JoplinNotebook>;
+    const newNotebook = (await this.request(
+      'POST',
+      '/folders',
+      body,
+    )) as JoplinNotebook;
+    this.cachedInScopeIds = undefined;
+    return newNotebook;
   }
 
   async getNotebookNotes(
@@ -54,6 +131,13 @@ export class NotebooksApi extends HttpClient {
     orderDir?: 'ASC' | 'DESC',
     limit?: number,
   ): Promise<JoplinNote[]> {
+    const inScopeIds = await this.getInScopeNotebookIds();
+    if (inScopeIds && !inScopeIds.has(notebookId)) {
+      throw new Error(
+        `Permission denied: Notebook ${notebookId} is out of scope.`,
+      );
+    }
+
     const fieldsParam =
       fields ||
       'id,title,body,parent_id,created_time,updated_time,user_created_time,user_updated_time,is_todo,todo_completed';
@@ -71,11 +155,27 @@ export class NotebooksApi extends HttpClient {
     notebookId: string,
     updates: { title?: string; parent_id?: string },
   ): Promise<JoplinNotebook> {
-    return this.request(
+    const inScopeIds = await this.getInScopeNotebookIds();
+    if (inScopeIds) {
+      if (!inScopeIds.has(notebookId)) {
+        throw new Error(
+          `Permission denied: Notebook ${notebookId} is out of scope.`,
+        );
+      }
+      if (updates.parent_id && !inScopeIds.has(updates.parent_id)) {
+        throw new Error(
+          `Permission denied: Target parent notebook ${updates.parent_id} is out of scope.`,
+        );
+      }
+    }
+
+    const updatedNotebook = (await this.request(
       'PUT',
       `/folders/${notebookId}`,
       updates,
-    ) as Promise<JoplinNotebook>;
+    )) as JoplinNotebook;
+    this.cachedInScopeIds = undefined;
+    return updatedNotebook;
   }
 
   async renameNotebook(
@@ -86,7 +186,15 @@ export class NotebooksApi extends HttpClient {
   }
 
   async deleteNotebook(notebookId: string): Promise<void> {
+    const inScopeIds = await this.getInScopeNotebookIds();
+    if (inScopeIds && !inScopeIds.has(notebookId)) {
+      throw new Error(
+        `Permission denied: Notebook ${notebookId} is out of scope.`,
+      );
+    }
+
     await this.request('DELETE', `/folders/${notebookId}`);
+    this.cachedInScopeIds = undefined;
   }
 
   /**
@@ -134,35 +242,13 @@ export class NotebooksApi extends HttpClient {
    */
   async getAllNotebooksTree(options?: { exclude?: string[] }): Promise<string> {
     const { exclude = [] } = options || {};
-    const allNotebooks = await this.listNotebooks('id,title,parent_id');
+    // Use the raw list to avoid recursive scoping
+    const allNotebooks = (await this.paginatedRequest(
+      '/folders?fields=id,title,parent_id',
+    )) as JoplinNotebook[];
     const excludeLower = exclude.map((e) => e.toLowerCase());
 
-    // Get scoped notebooks from config if scope exists
-    const useScope = hasNotebookScope();
-    const scopedNotebooks = useScope ? getScopedNotebooks() : [];
-
-    // Build a set of notebook IDs that are in scope (including their children)
-    const inScopeIds = new Set<string>();
-    if (useScope) {
-      const findNotebookAndChildren = (nb: JoplinNotebook) => {
-        inScopeIds.add(nb.id);
-        const addChildren = (parentId: string) => {
-          for (const child of allNotebooks.filter(
-            (n) => n.parent_id === parentId,
-          )) {
-            inScopeIds.add(child.id);
-            addChildren(child.id);
-          }
-        };
-        addChildren(nb.id);
-      };
-
-      for (const nb of allNotebooks) {
-        if (scopedNotebooks.includes(nb.title.toLowerCase())) {
-          findNotebookAndChildren(nb);
-        }
-      }
-    }
+    const inScopeIds = await this.getInScopeNotebookIds();
 
     const buildTree = (parentId: string | null, indent: string): string => {
       let result = '';
@@ -172,7 +258,7 @@ export class NotebooksApi extends HttpClient {
         const excluded = excludeLower.some((ex) =>
           nb.title.toLowerCase().includes(ex),
         );
-        const inScope = !useScope || inScopeIds.has(nb.id);
+        const inScope = !inScopeIds || inScopeIds.has(nb.id);
         return matchesParent && !excluded && inScope;
       });
       for (const child of children) {
@@ -197,10 +283,12 @@ export class NotebooksApi extends HttpClient {
     depth?: number;
   }): Promise<string> {
     const { exclude = [], depth } = options || {};
-    const allNotebooks = await this.listNotebooks('id,title,parent_id');
+    // Use the raw list
+    const allNotebooks = (await this.paginatedRequest(
+      '/folders?fields=id,title,parent_id',
+    )) as JoplinNotebook[];
     const excludeLower = exclude.map((e) => e.toLowerCase());
 
-    // Get scoped notebooks from config if scope exists
     const useScope = hasNotebookScope();
     const scopedNotebooks = useScope ? getScopedNotebooks() : [];
 

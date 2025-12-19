@@ -600,7 +600,20 @@ describe('JoplinApiClient', () => {
         ok: true,
         text: vi
           .fn()
-          .mockResolvedValue(JSON.stringify({ id: '123', title: 'Test Note' })),
+          .mockResolvedValue(
+            JSON.stringify({
+              id: '123',
+              title: 'Test Note',
+              parent_id: 'nb-1',
+            }),
+          ),
+      };
+      // Mock note scope check
+      const noteCheckResponse = {
+        ok: true,
+        text: vi
+          .fn()
+          .mockResolvedValue(JSON.stringify({ id: '123', parent_id: 'nb-1' })),
       };
       // Mock tag search (tag doesn't exist)
       const tagSearchResponse = {
@@ -622,6 +635,7 @@ describe('JoplinApiClient', () => {
 
       vi.mocked(global.fetch)
         .mockResolvedValueOnce(noteResponse as unknown as Response) // POST /notes
+        .mockResolvedValueOnce(noteCheckResponse as unknown as Response) // GET /notes/123 (scope check)
         .mockResolvedValueOnce(tagSearchResponse as unknown as Response) // GET /search?query=work&type=tag
         .mockResolvedValueOnce(tagCreateResponse as unknown as Response) // POST /tags
         .mockResolvedValueOnce(tagAssociateResponse as unknown as Response); // POST /tags/tag-123/notes
@@ -639,16 +653,16 @@ describe('JoplinApiClient', () => {
         }),
       );
 
-      // Verify tag was searched
+      // Verify tag was searched (skipping the scope check verification as it's internal)
       expect(global.fetch).toHaveBeenNthCalledWith(
-        2,
+        3,
         expect.stringContaining('/search?query=work&type=tag'),
         expect.any(Object),
       );
 
       // Verify tag was created
       expect(global.fetch).toHaveBeenNthCalledWith(
-        3,
+        4,
         expect.any(String),
         expect.objectContaining({
           method: 'POST',
@@ -658,7 +672,7 @@ describe('JoplinApiClient', () => {
 
       // Verify tag was associated with note
       expect(global.fetch).toHaveBeenNthCalledWith(
-        4,
+        5,
         expect.stringContaining('/tags/tag-123/notes'),
         expect.objectContaining({
           method: 'POST',
@@ -668,6 +682,15 @@ describe('JoplinApiClient', () => {
     });
 
     it('should add tags to existing note', async () => {
+      // Mock note scope check
+      const noteCheckResponse = {
+        ok: true,
+        text: vi
+          .fn()
+          .mockResolvedValue(
+            JSON.stringify({ id: 'note-123', parent_id: 'nb-1' }),
+          ),
+      };
       // Mock tag search (tag doesn't exist)
       const tagSearchResponse = {
         ok: true,
@@ -687,6 +710,7 @@ describe('JoplinApiClient', () => {
       };
 
       vi.mocked(global.fetch)
+        .mockResolvedValueOnce(noteCheckResponse as unknown as Response)
         .mockResolvedValueOnce(tagSearchResponse as unknown as Response)
         .mockResolvedValueOnce(tagCreateResponse as unknown as Response)
         .mockResolvedValueOnce(tagAssociateResponse as unknown as Response);
@@ -694,10 +718,19 @@ describe('JoplinApiClient', () => {
       const client = new JoplinApiClient();
       await client.tags.addTagsToNote('note-123', 'urgent');
 
-      expect(global.fetch).toHaveBeenCalledTimes(3);
+      expect(global.fetch).toHaveBeenCalledTimes(4);
     });
 
     it('should remove tags from note', async () => {
+      // Mock note scope check
+      const noteCheckResponse = {
+        ok: true,
+        text: vi
+          .fn()
+          .mockResolvedValue(
+            JSON.stringify({ id: 'note-123', parent_id: 'nb-1' }),
+          ),
+      };
       // Mock tag search (tag exists)
       const tagSearchResponse = {
         ok: true,
@@ -715,6 +748,7 @@ describe('JoplinApiClient', () => {
       };
 
       vi.mocked(global.fetch)
+        .mockResolvedValueOnce(noteCheckResponse as unknown as Response)
         .mockResolvedValueOnce(tagSearchResponse as unknown as Response)
         .mockResolvedValueOnce(tagRemoveResponse as unknown as Response);
 
@@ -723,7 +757,7 @@ describe('JoplinApiClient', () => {
 
       // Verify DELETE was called
       expect(global.fetch).toHaveBeenNthCalledWith(
-        2,
+        3,
         expect.stringContaining('/tags/tag-draft/notes/note-123'),
         expect.objectContaining({
           method: 'DELETE',
@@ -733,6 +767,15 @@ describe('JoplinApiClient', () => {
 
     it('should handle multiple comma-separated tags', async () => {
       const mockResponses = [
+        // Scope check
+        {
+          ok: true,
+          text: vi
+            .fn()
+            .mockResolvedValue(
+              JSON.stringify({ id: 'note-123', parent_id: 'nb-1' }),
+            ),
+        },
         // Search for 'work' tag
         {
           ok: true,
@@ -772,10 +815,19 @@ describe('JoplinApiClient', () => {
       const client = new JoplinApiClient();
       await client.tags.addTagsToNote('note-123', 'work, urgent');
 
-      expect(global.fetch).toHaveBeenCalledTimes(6);
+      expect(global.fetch).toHaveBeenCalledTimes(7);
     });
 
     it('should reuse existing tags instead of creating duplicates', async () => {
+      // Mock note scope check
+      const noteCheckResponse = {
+        ok: true,
+        text: vi
+          .fn()
+          .mockResolvedValue(
+            JSON.stringify({ id: 'note-123', parent_id: 'nb-1' }),
+          ),
+      };
       // Mock tag search (tag exists)
       const tagSearchResponse = {
         ok: true,
@@ -793,6 +845,7 @@ describe('JoplinApiClient', () => {
       };
 
       vi.mocked(global.fetch)
+        .mockResolvedValueOnce(noteCheckResponse as unknown as Response)
         .mockResolvedValueOnce(tagSearchResponse as unknown as Response)
         .mockResolvedValueOnce(tagAssociateResponse as unknown as Response);
 
@@ -800,7 +853,7 @@ describe('JoplinApiClient', () => {
       await client.tags.addTagsToNote('note-123', 'work');
 
       // Should NOT call POST /tags (tag already exists)
-      expect(global.fetch).toHaveBeenCalledTimes(2);
+      expect(global.fetch).toHaveBeenCalledTimes(3);
       expect(global.fetch).not.toHaveBeenCalledWith(
         expect.anything(),
         expect.objectContaining({
@@ -1031,7 +1084,10 @@ describe('JoplinApiClient', () => {
         .mockResolvedValueOnce(tagsResponse as unknown as Response);
 
       const client = new JoplinApiClient();
-      const result = (await client.notes.getNote('123')) as {
+      const result = (await client.notes.getNote(
+        '123',
+        'id,title,body,tags',
+      )) as {
         tags: Array<{ id: string; title: string }>;
       };
 
@@ -1046,7 +1102,19 @@ describe('JoplinApiClient', () => {
         ok: true,
         text: vi
           .fn()
-          .mockResolvedValue(JSON.stringify({ id: '123', title: 'Test Note' })),
+          .mockResolvedValue(
+            JSON.stringify({
+              id: '123',
+              title: 'Test Note',
+              parent_id: 'nb-1',
+            }),
+          ),
+      };
+      const noteCheckResponse = {
+        ok: true,
+        text: vi
+          .fn()
+          .mockResolvedValue(JSON.stringify({ id: '123', parent_id: 'nb-1' })),
       };
       const tagSearchResponse = {
         ok: true,
@@ -1068,6 +1136,7 @@ describe('JoplinApiClient', () => {
 
       vi.mocked(global.fetch)
         .mockResolvedValueOnce(noteResponse as unknown as Response)
+        .mockResolvedValueOnce(noteCheckResponse as unknown as Response)
         .mockResolvedValueOnce(tagSearchResponse as unknown as Response)
         .mockResolvedValueOnce(tagCreateResponse as unknown as Response)
         .mockResolvedValueOnce(tagAssociateResponse as unknown as Response);
@@ -1076,7 +1145,7 @@ describe('JoplinApiClient', () => {
       await client.notes.createNote('Test Note', 'Body', undefined, 'newtag');
 
       // Should search for tag, not find it, create it, and associate it
-      expect(global.fetch).toHaveBeenCalledTimes(4);
+      expect(global.fetch).toHaveBeenCalledTimes(5);
     });
   });
 });

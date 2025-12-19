@@ -52,6 +52,8 @@ export class JoplinApiClient extends HttpClient {
 
     // Wire up cross-domain dependencies
     this.notes.setTagsApi(this.tags);
+    this.notes.setNotebooksApi(this.notebooks);
     this.tags.setNotesApi(this.notes);
+    this.tags.setNotebooksApi(this.notebooks);
   }
 }
