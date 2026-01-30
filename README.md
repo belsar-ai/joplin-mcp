@@ -91,19 +91,44 @@ Show me all notes in my Work Projects notebook.
 Make a new note with a Mermaid diagram showing how a bill is passed on Capitol Hill.
 ```
 
+### Working with Large Notes
+
+The AI can navigate, search, and edit large notes without pulling the entire body into context:
+
+```
+Show me the table of contents for my platform docs note.
+```
+
+```
+Show me section 10.1 of my platform docs note.
+```
+
+```
+Search my project plan for "deadline".
+```
+
+```
+Replace "Q3 2025" with "Q4 2025" in my roadmap note.
+```
+
 ## Available API (Script Context)
 
 The AI has access to a global `joplin` object with the following methods:
 
 ### Notes (`joplin.notes`)
 
+- `readNote(id)`: Pretty-printed note with metadata header and body. Preferred for display.
+- `getNote(id)`: Raw note object. Prefer `readNote()` for display.
 - `searchNotes(query: string)`: Smart search with "any:1" logic.
 - `listAllNotes(fields?, ...)`: Get all notes.
-- `getNote(id)`: Get full note content.
 - `createNote(title, body, notebookId, ...)`: Create a new note.
 - `updateNote(id, updates)`: Update properties or body.
 - `appendToNote(id, text)`: Add text to the end.
 - `prependToNote(id, text)`: Add text to the beginning.
+- `editNote(id, oldString, newString, replaceAll?)`: Server-side string replacement. Fails if not found or ambiguous without `replaceAll`.
+- `getNoteLineRange(id, startLine, endLine)`: Read a slice of a note by line number (1-indexed).
+- `searchInNote(id, pattern)`: Case-insensitive search within a note. Returns matches with line numbers and context.
+- `getNoteSections(id)`: Parse markdown headings into a table of contents with line numbers.
 - `deleteNote(id)`: Move to trash.
 
 ### Notebooks (`joplin.notebooks`)

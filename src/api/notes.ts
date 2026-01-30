@@ -106,6 +106,29 @@ export class NotesApi extends HttpClient {
     return { ...note, ...(tags ? { tags } : {}) };
   }
 
+  async readNote(noteId: string): Promise<string> {
+    const note = await this.getNote(
+      noteId,
+      'id,title,body,parent_id,is_todo,todo_completed,tags',
+    );
+    const lines = (note.body ?? '').split('\n');
+    const totalLines = lines.length;
+    const parts: string[] = [];
+    parts.push(`Title: ${note.title}`);
+    parts.push(`ID: ${note.id}`);
+    if (note.is_todo) {
+      parts.push(`Todo: ${note.todo_completed ? 'completed' : 'open'}`);
+    }
+    if (note.tags && note.tags.length > 0) {
+      parts.push(`Tags: ${note.tags.map((t) => t.title).join(', ')}`);
+    }
+    parts.push(`Lines: 1-${totalLines} of ${totalLines}`);
+    parts.push('');
+    parts.push(note.body ?? '');
+
+    return parts.join('\n');
+  }
+
   async createNote(
     title: string,
     body: string,
@@ -197,7 +220,7 @@ export class NotesApi extends HttpClient {
     oldString: string,
     newString: string,
     replaceAll?: boolean,
-  ): Promise<{ replacements: number; context: string }> {
+  ): Promise<string> {
     const note = await this.getNote(noteId, 'id,body,parent_id');
     const body = note.body ?? '';
 
@@ -249,31 +272,23 @@ export class NotesApi extends HttpClient {
         .split('\n').length;
       const start = Math.max(0, lineNumber - 4); // 3 lines before (0-indexed)
       const end = Math.min(newLines.length, lineNumber + 3); // 3 lines after
-      const snippet = newLines
-        .slice(start, end)
-        .map((l: string, i: number) => `${start + i + 1}\t${l}`)
-        .join('\n');
+      const snippet = newLines.slice(start, end).join('\n');
       contextParts.push(
-        count > 1 ? `--- replacement ${r + 1} ---\n${snippet}` : snippet,
+        count > 1
+          ? `--- replacement ${r + 1} (line ${lineNumber}) ---\n${snippet}`
+          : `Line ${lineNumber}:\n${snippet}`,
       );
     }
 
-    return {
-      replacements: count,
-      context: contextParts.join('\n\n'),
-    };
+    const header = `Replaced ${count} occurrence${count > 1 ? 's' : ''}:\n`;
+    return header + contextParts.join('\n\n');
   }
 
   async getNoteLineRange(
     noteId: string,
     startLine: number,
     endLine: number,
-  ): Promise<{
-    totalLines: number;
-    startLine: number;
-    endLine: number;
-    content: string;
-  }> {
+  ): Promise<string> {
     const note = await this.getNote(noteId, 'id,body,parent_id');
     const lines = (note.body ?? '').split('\n');
     const totalLines = lines.length;
@@ -284,74 +299,52 @@ export class NotesApi extends HttpClient {
 
     // Convert to 0-indexed for slicing
     const slice = lines.slice(clampedStart - 1, clampedEnd);
-    const content = slice.map((l, i) => `${clampedStart + i}\t${l}`).join('\n');
 
-    return {
-      totalLines,
-      startLine: clampedStart,
-      endLine: clampedEnd,
-      content,
-    };
+    return `Lines ${clampedStart}-${clampedEnd} of ${totalLines}:\n${slice.join('\n')}`;
   }
 
-  async searchInNote(
-    noteId: string,
-    pattern: string,
-  ): Promise<{
-    totalMatches: number;
-    matches: Array<{ line: string; lineNumber: number; context: string }>;
-  }> {
+  async searchInNote(noteId: string, pattern: string): Promise<string> {
     const note = await this.getNote(noteId, 'id,body,parent_id');
     const lines = (note.body ?? '').split('\n');
     const lowerPattern = pattern.toLowerCase();
 
-    const matches: Array<{
-      line: string;
-      lineNumber: number;
-      context: string;
-    }> = [];
+    const matchParts: string[] = [];
+    let matchCount = 0;
 
     for (let i = 0; i < lines.length; i++) {
       if (lines[i].toLowerCase().includes(lowerPattern)) {
+        matchCount++;
         const start = Math.max(0, i - 2);
         const end = Math.min(lines.length, i + 3);
-        const context = lines
-          .slice(start, end)
-          .map((l, j) => `${start + j + 1}\t${l}`)
-          .join('\n');
-        matches.push({
-          line: lines[i],
-          lineNumber: i + 1,
-          context,
-        });
+        const context = lines.slice(start, end).join('\n');
+        matchParts.push(
+          `--- match ${matchCount} (line ${i + 1}) ---\n${context}`,
+        );
       }
     }
 
-    return { totalMatches: matches.length, matches };
+    if (matchCount === 0) {
+      return `No matches found for "${pattern}".`;
+    }
+    return `Found ${matchCount} match${matchCount > 1 ? 'es' : ''}:\n\n${matchParts.join('\n\n')}`;
   }
 
-  async getNoteSections(
-    noteId: string,
-  ): Promise<Array<{ level: number; title: string; lineNumber: number }>> {
+  async getNoteSections(noteId: string): Promise<string> {
     const note = await this.getNote(noteId, 'id,body,parent_id');
     const lines = (note.body ?? '').split('\n');
-    const sections: Array<{
-      level: number;
-      title: string;
-      lineNumber: number;
-    }> = [];
+    const sectionLines: string[] = [];
 
     for (let i = 0; i < lines.length; i++) {
       const match = lines[i].match(/^(#{1,6})\s+(.+)/);
       if (match) {
-        sections.push({
-          level: match[1].length,
-          title: match[2],
-          lineNumber: i + 1,
-        });
+        const indent = '  '.repeat(match[1].length - 1);
+        sectionLines.push(`${indent}${match[1]} ${match[2]} (line ${i + 1})`);
       }
     }
 
-    return sections;
+    if (sectionLines.length === 0) {
+      return 'No headings found.';
+    }
+    return `Table of Contents:\n${sectionLines.join('\n')}`;
   }
 }

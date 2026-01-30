@@ -862,6 +862,121 @@ describe('JoplinApiClient', () => {
     });
   });
 
+  describe('readNote', () => {
+    beforeEach(() => {
+      process.env.JOPLIN_TOKEN = 'test-token';
+      delete process.env.JOPLIN_PORT;
+      global.fetch = vi.fn();
+    });
+
+    it('should return pretty-printed note with metadata and numbered lines', async () => {
+      const noteResponse = {
+        ok: true,
+        text: vi.fn().mockResolvedValue(
+          JSON.stringify({
+            id: '123',
+            title: 'My Note',
+            body: 'line one\nline two\nline three',
+            parent_id: 'nb-1',
+            is_todo: 0,
+            todo_completed: 0,
+          }),
+        ),
+      };
+      const tagsResponse = {
+        ok: true,
+        text: vi.fn().mockResolvedValue(
+          JSON.stringify({
+            items: [
+              { id: 'tag-1', title: 'work' },
+              { id: 'tag-2', title: 'urgent' },
+            ],
+            has_more: false,
+          }),
+        ),
+      };
+
+      vi.mocked(global.fetch)
+        .mockResolvedValueOnce(noteResponse as unknown as Response)
+        .mockResolvedValueOnce(tagsResponse as unknown as Response);
+
+      const client = new JoplinApiClient();
+      const result = await client.notes.readNote('123');
+
+      expect(result).toContain('Title: My Note');
+      expect(result).toContain('ID: 123');
+      expect(result).toContain('Tags: work, urgent');
+      expect(result).toContain('Lines: 1-3 of 3');
+      expect(result).toContain('Lines: 1-3 of 3');
+      expect(result).toContain('line one');
+      expect(result).toContain('line two');
+      expect(result).toContain('line three');
+    });
+
+    it('should show todo status when note is a todo', async () => {
+      const noteResponse = {
+        ok: true,
+        text: vi.fn().mockResolvedValue(
+          JSON.stringify({
+            id: '456',
+            title: 'My Todo',
+            body: 'do the thing',
+            parent_id: 'nb-1',
+            is_todo: 1,
+            todo_completed: 0,
+          }),
+        ),
+      };
+      const tagsResponse = {
+        ok: true,
+        text: vi
+          .fn()
+          .mockResolvedValue(JSON.stringify({ items: [], has_more: false })),
+      };
+
+      vi.mocked(global.fetch)
+        .mockResolvedValueOnce(noteResponse as unknown as Response)
+        .mockResolvedValueOnce(tagsResponse as unknown as Response);
+
+      const client = new JoplinApiClient();
+      const result = await client.notes.readNote('456');
+
+      expect(result).toContain('Todo: open');
+      expect(result).not.toContain('Tags:');
+    });
+
+    it('should omit todo line for regular notes', async () => {
+      const noteResponse = {
+        ok: true,
+        text: vi.fn().mockResolvedValue(
+          JSON.stringify({
+            id: '789',
+            title: 'Regular Note',
+            body: 'content',
+            parent_id: 'nb-1',
+            is_todo: 0,
+            todo_completed: 0,
+          }),
+        ),
+      };
+      const tagsResponse = {
+        ok: true,
+        text: vi
+          .fn()
+          .mockResolvedValue(JSON.stringify({ items: [], has_more: false })),
+      };
+
+      vi.mocked(global.fetch)
+        .mockResolvedValueOnce(noteResponse as unknown as Response)
+        .mockResolvedValueOnce(tagsResponse as unknown as Response);
+
+      const client = new JoplinApiClient();
+      const result = await client.notes.readNote('789');
+
+      expect(result).not.toContain('Todo:');
+    });
+  });
+
   describe('editNote', () => {
     beforeEach(() => {
       process.env.JOPLIN_TOKEN = 'test-token';
@@ -905,8 +1020,8 @@ describe('JoplinApiClient', () => {
         'new text here',
       );
 
-      expect(result.replacements).toBe(1);
-      expect(result.context).toContain('new text here');
+      expect(result).toContain('Replaced 1 occurrence');
+      expect(result).toContain('new text here');
       // Verify PUT was called with replaced body
       expect(global.fetch).toHaveBeenNthCalledWith(
         3,
@@ -999,7 +1114,7 @@ describe('JoplinApiClient', () => {
         true,
       );
 
-      expect(result.replacements).toBe(3);
+      expect(result).toContain('Replaced 3 occurrences');
       expect(global.fetch).toHaveBeenNthCalledWith(
         3,
         expect.any(String),
@@ -1049,9 +1164,9 @@ describe('JoplinApiClient', () => {
       );
 
       // Context should include lines around the replacement
-      expect(result.context).toContain('REPLACED line');
-      expect(result.context).toContain('line 2');
-      expect(result.context).toContain('line 6');
+      expect(result).toContain('REPLACED line');
+      expect(result).toContain('line 2');
+      expect(result).toContain('line 6');
     });
   });
 
@@ -1080,10 +1195,7 @@ describe('JoplinApiClient', () => {
       const client = new JoplinApiClient();
       const result = await client.notes.getNoteLineRange('123', 2, 4);
 
-      expect(result.totalLines).toBe(5);
-      expect(result.startLine).toBe(2);
-      expect(result.endLine).toBe(4);
-      expect(result.content).toBe('2\tline 2\n3\tline 3\n4\tline 4');
+      expect(result).toBe('Lines 2-4 of 5:\nline 2\nline 3\nline 4');
     });
 
     it('should clamp out-of-range values', async () => {
@@ -1104,10 +1216,7 @@ describe('JoplinApiClient', () => {
       const client = new JoplinApiClient();
       const result = await client.notes.getNoteLineRange('123', -5, 100);
 
-      expect(result.totalLines).toBe(3);
-      expect(result.startLine).toBe(1);
-      expect(result.endLine).toBe(3);
-      expect(result.content).toBe('1\tline 1\n2\tline 2\n3\tline 3');
+      expect(result).toBe('Lines 1-3 of 3:\nline 1\nline 2\nline 3');
     });
 
     it('should return total line count', async () => {
@@ -1128,7 +1237,7 @@ describe('JoplinApiClient', () => {
       const client = new JoplinApiClient();
       const result = await client.notes.getNoteLineRange('123', 1, 2);
 
-      expect(result.totalLines).toBe(10);
+      expect(result).toContain('of 10:');
     });
   });
 
@@ -1157,12 +1266,12 @@ describe('JoplinApiClient', () => {
       const client = new JoplinApiClient();
       const result = await client.notes.searchInNote('123', 'find me');
 
-      expect(result.totalMatches).toBe(1);
-      expect(result.matches[0].lineNumber).toBe(3);
-      expect(result.matches[0].line).toBe('find me here');
+      expect(result).toContain('Found 1 match:');
+      expect(result).toContain('line 3');
+      expect(result).toContain('find me here');
       // Context should include surrounding lines
-      expect(result.matches[0].context).toContain('line 1');
-      expect(result.matches[0].context).toContain('line 5');
+      expect(result).toContain('line 1');
+      expect(result).toContain('line 5');
     });
 
     it('should return empty array for no matches', async () => {
@@ -1187,8 +1296,7 @@ describe('JoplinApiClient', () => {
         'nonexistent pattern',
       );
 
-      expect(result.totalMatches).toBe(0);
-      expect(result.matches).toEqual([]);
+      expect(result).toBe('No matches found for "nonexistent pattern".');
     });
 
     it('should perform case-insensitive matching', async () => {
@@ -1209,7 +1317,7 @@ describe('JoplinApiClient', () => {
       const client = new JoplinApiClient();
       const result = await client.notes.searchInNote('123', 'hello');
 
-      expect(result.totalMatches).toBe(3);
+      expect(result).toContain('Found 3 matches:');
     });
   });
 
@@ -1247,14 +1355,13 @@ describe('JoplinApiClient', () => {
       const client = new JoplinApiClient();
       const result = await client.notes.getNoteSections('123');
 
-      expect(result).toEqual([
-        { level: 1, title: 'Title', lineNumber: 1 },
-        { level: 2, title: 'Section 1', lineNumber: 3 },
-        { level: 3, title: 'Subsection 1.1', lineNumber: 5 },
-        { level: 4, title: 'Deep heading', lineNumber: 6 },
-        { level: 5, title: 'Deeper heading', lineNumber: 7 },
-        { level: 6, title: 'Deepest heading', lineNumber: 8 },
-      ]);
+      expect(result).toContain('Table of Contents:');
+      expect(result).toContain('# Title (line 1)');
+      expect(result).toContain('  ## Section 1 (line 3)');
+      expect(result).toContain('    ### Subsection 1.1 (line 5)');
+      expect(result).toContain('      #### Deep heading (line 6)');
+      expect(result).toContain('        ##### Deeper heading (line 7)');
+      expect(result).toContain('          ###### Deepest heading (line 8)');
     });
 
     it('should handle notes with no headings', async () => {
@@ -1276,7 +1383,7 @@ describe('JoplinApiClient', () => {
       const client = new JoplinApiClient();
       const result = await client.notes.getNoteSections('123');
 
-      expect(result).toEqual([]);
+      expect(result).toBe('No headings found.');
     });
 
     it('should not match lines without space after hash', async () => {
@@ -1297,9 +1404,9 @@ describe('JoplinApiClient', () => {
       const client = new JoplinApiClient();
       const result = await client.notes.getNoteSections('123');
 
-      expect(result).toEqual([
-        { level: 1, title: 'Real heading', lineNumber: 2 },
-      ]);
+      expect(result).toContain('# Real heading (line 2)');
+      expect(result).not.toContain('#not a heading');
+      expect(result).not.toContain('##also not');
     });
   });
 

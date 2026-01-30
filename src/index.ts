@@ -150,16 +150,19 @@ joplin.notebooks.getScopedTree({ exclude?, depth? }) // Returns formatted tree o
 // NOTES
 joplin.notes.listAllNotes(fields?, includeDeleted?, orderBy?, orderDir?, limit?)
 joplin.notes.searchNotes(query) // Returns array of notes
-joplin.notes.getNote(id) // Returns full note object with body
+joplin.notes.readNote(id) // Pretty-printed note with metadata header and numbered lines. Use this to display a note.
+joplin.notes.getNote(id) // Returns raw note object. Prefer readNote() for display.
 joplin.notes.createNote(title, body, notebookId?, tags?, isTodo?, todoDue?, todoCompleted?)
 joplin.notes.updateNote(id, { title?, body?, parent_id?, is_todo?, todo_due?, todo_completed? })
 joplin.notes.appendToNote(id, content) // Appends text to end
 joplin.notes.prependToNote(id, content) // Prepends text to start
 joplin.notes.deleteNote(id)
 joplin.notes.editNote(id, oldString, newString, replaceAll?) // Server-side string replacement. Fails if oldString not found or matches multiple times (unless replaceAll=true)
-joplin.notes.getNoteLineRange(id, startLine, endLine) // Read lines by number (1-indexed). Returns { totalLines, startLine, endLine, content }
-joplin.notes.searchInNote(id, pattern) // Case-insensitive search within a note. Returns matches with line numbers and context
+joplin.notes.getNoteLineRange(id, startLine, endLine) // Read lines by number (1-indexed)
+joplin.notes.searchInNote(id, pattern) // Case-insensitive search within a note
 joplin.notes.getNoteSections(id) // Parse markdown headings into TOC with line numbers
+
+IMPORTANT: readNote, getNoteLineRange, searchInNote, getNoteSections, and editNote return pre-formatted output. Your ONLY response must be "Done." - DO NOT repeat, summarize, or reformat the output.
 
 // TAGS
 joplin.tags.listTags()
