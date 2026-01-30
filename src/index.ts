@@ -156,6 +156,10 @@ joplin.notes.updateNote(id, { title?, body?, parent_id?, is_todo?, todo_due?, to
 joplin.notes.appendToNote(id, content) // Appends text to end
 joplin.notes.prependToNote(id, content) // Prepends text to start
 joplin.notes.deleteNote(id)
+joplin.notes.editNote(id, oldString, newString, replaceAll?) // Server-side string replacement. Fails if oldString not found or matches multiple times (unless replaceAll=true)
+joplin.notes.getNoteLineRange(id, startLine, endLine) // Read lines by number (1-indexed). Returns { totalLines, startLine, endLine, content }
+joplin.notes.searchInNote(id, pattern) // Case-insensitive search within a note. Returns matches with line numbers and context
+joplin.notes.getNoteSections(id) // Parse markdown headings into TOC with line numbers
 
 // TAGS
 joplin.tags.listTags()

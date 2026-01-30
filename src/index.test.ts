@@ -598,15 +598,13 @@ describe('JoplinApiClient', () => {
       // Mock note creation
       const noteResponse = {
         ok: true,
-        text: vi
-          .fn()
-          .mockResolvedValue(
-            JSON.stringify({
-              id: '123',
-              title: 'Test Note',
-              parent_id: 'nb-1',
-            }),
-          ),
+        text: vi.fn().mockResolvedValue(
+          JSON.stringify({
+            id: '123',
+            title: 'Test Note',
+            parent_id: 'nb-1',
+          }),
+        ),
       };
       // Mock note scope check
       const noteCheckResponse = {
@@ -864,6 +862,447 @@ describe('JoplinApiClient', () => {
     });
   });
 
+  describe('editNote', () => {
+    beforeEach(() => {
+      process.env.JOPLIN_TOKEN = 'test-token';
+      delete process.env.JOPLIN_PORT;
+      global.fetch = vi.fn();
+    });
+
+    it('should replace a single match and return context', async () => {
+      const body = 'line 1\nline 2\nold text here\nline 4\nline 5';
+      const getNoteResponse = {
+        ok: true,
+        text: vi
+          .fn()
+          .mockResolvedValue(
+            JSON.stringify({ id: '123', body, parent_id: 'nb-1' }),
+          ),
+      };
+      // updateNote scope check
+      const scopeCheckResponse = {
+        ok: true,
+        text: vi
+          .fn()
+          .mockResolvedValue(JSON.stringify({ id: '123', parent_id: 'nb-1' })),
+      };
+      const updateResponse = {
+        ok: true,
+        text: vi
+          .fn()
+          .mockResolvedValue(JSON.stringify({ id: '123', body: 'updated' })),
+      };
+
+      vi.mocked(global.fetch)
+        .mockResolvedValueOnce(getNoteResponse as unknown as Response)
+        .mockResolvedValueOnce(scopeCheckResponse as unknown as Response)
+        .mockResolvedValueOnce(updateResponse as unknown as Response);
+
+      const client = new JoplinApiClient();
+      const result = await client.notes.editNote(
+        '123',
+        'old text here',
+        'new text here',
+      );
+
+      expect(result.replacements).toBe(1);
+      expect(result.context).toContain('new text here');
+      // Verify PUT was called with replaced body
+      expect(global.fetch).toHaveBeenNthCalledWith(
+        3,
+        expect.any(String),
+        expect.objectContaining({
+          method: 'PUT',
+          body: JSON.stringify({
+            body: 'line 1\nline 2\nnew text here\nline 4\nline 5',
+          }),
+        }),
+      );
+    });
+
+    it('should throw when oldString not found', async () => {
+      const getNoteResponse = {
+        ok: true,
+        text: vi.fn().mockResolvedValue(
+          JSON.stringify({
+            id: '123',
+            body: 'some content',
+            parent_id: 'nb-1',
+          }),
+        ),
+      };
+
+      vi.mocked(global.fetch).mockResolvedValueOnce(
+        getNoteResponse as unknown as Response,
+      );
+
+      const client = new JoplinApiClient();
+      await expect(
+        client.notes.editNote('123', 'nonexistent', 'replacement'),
+      ).rejects.toThrow('oldString not found in note');
+    });
+
+    it('should throw when multiple matches found without replaceAll', async () => {
+      const body = 'foo bar foo baz foo';
+      const getNoteResponse = {
+        ok: true,
+        text: vi
+          .fn()
+          .mockResolvedValue(
+            JSON.stringify({ id: '123', body, parent_id: 'nb-1' }),
+          ),
+      };
+
+      vi.mocked(global.fetch).mockResolvedValueOnce(
+        getNoteResponse as unknown as Response,
+      );
+
+      const client = new JoplinApiClient();
+      await expect(client.notes.editNote('123', 'foo', 'qux')).rejects.toThrow(
+        'Found 3 matches for oldString. Pass replaceAll=true to replace all, or provide a more specific string.',
+      );
+    });
+
+    it('should replace all matches when replaceAll is true', async () => {
+      const body = 'foo bar\nfoo baz\nfoo qux';
+      const getNoteResponse = {
+        ok: true,
+        text: vi
+          .fn()
+          .mockResolvedValue(
+            JSON.stringify({ id: '123', body, parent_id: 'nb-1' }),
+          ),
+      };
+      const scopeCheckResponse = {
+        ok: true,
+        text: vi
+          .fn()
+          .mockResolvedValue(JSON.stringify({ id: '123', parent_id: 'nb-1' })),
+      };
+      const updateResponse = {
+        ok: true,
+        text: vi
+          .fn()
+          .mockResolvedValue(JSON.stringify({ id: '123', body: 'updated' })),
+      };
+
+      vi.mocked(global.fetch)
+        .mockResolvedValueOnce(getNoteResponse as unknown as Response)
+        .mockResolvedValueOnce(scopeCheckResponse as unknown as Response)
+        .mockResolvedValueOnce(updateResponse as unknown as Response);
+
+      const client = new JoplinApiClient();
+      const result = await client.notes.editNote(
+        '123',
+        'foo',
+        'replaced',
+        true,
+      );
+
+      expect(result.replacements).toBe(3);
+      expect(global.fetch).toHaveBeenNthCalledWith(
+        3,
+        expect.any(String),
+        expect.objectContaining({
+          method: 'PUT',
+          body: JSON.stringify({
+            body: 'replaced bar\nreplaced baz\nreplaced qux',
+          }),
+        }),
+      );
+    });
+
+    it('should return context around replacement sites', async () => {
+      const body =
+        'line 1\nline 2\nline 3\nTARGET line\nline 5\nline 6\nline 7';
+      const getNoteResponse = {
+        ok: true,
+        text: vi
+          .fn()
+          .mockResolvedValue(
+            JSON.stringify({ id: '123', body, parent_id: 'nb-1' }),
+          ),
+      };
+      const scopeCheckResponse = {
+        ok: true,
+        text: vi
+          .fn()
+          .mockResolvedValue(JSON.stringify({ id: '123', parent_id: 'nb-1' })),
+      };
+      const updateResponse = {
+        ok: true,
+        text: vi
+          .fn()
+          .mockResolvedValue(JSON.stringify({ id: '123', body: 'updated' })),
+      };
+
+      vi.mocked(global.fetch)
+        .mockResolvedValueOnce(getNoteResponse as unknown as Response)
+        .mockResolvedValueOnce(scopeCheckResponse as unknown as Response)
+        .mockResolvedValueOnce(updateResponse as unknown as Response);
+
+      const client = new JoplinApiClient();
+      const result = await client.notes.editNote(
+        '123',
+        'TARGET line',
+        'REPLACED line',
+      );
+
+      // Context should include lines around the replacement
+      expect(result.context).toContain('REPLACED line');
+      expect(result.context).toContain('line 2');
+      expect(result.context).toContain('line 6');
+    });
+  });
+
+  describe('getNoteLineRange', () => {
+    beforeEach(() => {
+      process.env.JOPLIN_TOKEN = 'test-token';
+      delete process.env.JOPLIN_PORT;
+      global.fetch = vi.fn();
+    });
+
+    it('should return correct slice of lines', async () => {
+      const body = 'line 1\nline 2\nline 3\nline 4\nline 5';
+      const getNoteResponse = {
+        ok: true,
+        text: vi
+          .fn()
+          .mockResolvedValue(
+            JSON.stringify({ id: '123', body, parent_id: 'nb-1' }),
+          ),
+      };
+
+      vi.mocked(global.fetch).mockResolvedValueOnce(
+        getNoteResponse as unknown as Response,
+      );
+
+      const client = new JoplinApiClient();
+      const result = await client.notes.getNoteLineRange('123', 2, 4);
+
+      expect(result.totalLines).toBe(5);
+      expect(result.startLine).toBe(2);
+      expect(result.endLine).toBe(4);
+      expect(result.content).toBe('2\tline 2\n3\tline 3\n4\tline 4');
+    });
+
+    it('should clamp out-of-range values', async () => {
+      const body = 'line 1\nline 2\nline 3';
+      const getNoteResponse = {
+        ok: true,
+        text: vi
+          .fn()
+          .mockResolvedValue(
+            JSON.stringify({ id: '123', body, parent_id: 'nb-1' }),
+          ),
+      };
+
+      vi.mocked(global.fetch).mockResolvedValueOnce(
+        getNoteResponse as unknown as Response,
+      );
+
+      const client = new JoplinApiClient();
+      const result = await client.notes.getNoteLineRange('123', -5, 100);
+
+      expect(result.totalLines).toBe(3);
+      expect(result.startLine).toBe(1);
+      expect(result.endLine).toBe(3);
+      expect(result.content).toBe('1\tline 1\n2\tline 2\n3\tline 3');
+    });
+
+    it('should return total line count', async () => {
+      const body = 'a\nb\nc\nd\ne\nf\ng\nh\ni\nj';
+      const getNoteResponse = {
+        ok: true,
+        text: vi
+          .fn()
+          .mockResolvedValue(
+            JSON.stringify({ id: '123', body, parent_id: 'nb-1' }),
+          ),
+      };
+
+      vi.mocked(global.fetch).mockResolvedValueOnce(
+        getNoteResponse as unknown as Response,
+      );
+
+      const client = new JoplinApiClient();
+      const result = await client.notes.getNoteLineRange('123', 1, 2);
+
+      expect(result.totalLines).toBe(10);
+    });
+  });
+
+  describe('searchInNote', () => {
+    beforeEach(() => {
+      process.env.JOPLIN_TOKEN = 'test-token';
+      delete process.env.JOPLIN_PORT;
+      global.fetch = vi.fn();
+    });
+
+    it('should find matches with line numbers and context', async () => {
+      const body = 'line 1\nline 2\nfind me here\nline 4\nline 5\nline 6';
+      const getNoteResponse = {
+        ok: true,
+        text: vi
+          .fn()
+          .mockResolvedValue(
+            JSON.stringify({ id: '123', body, parent_id: 'nb-1' }),
+          ),
+      };
+
+      vi.mocked(global.fetch).mockResolvedValueOnce(
+        getNoteResponse as unknown as Response,
+      );
+
+      const client = new JoplinApiClient();
+      const result = await client.notes.searchInNote('123', 'find me');
+
+      expect(result.totalMatches).toBe(1);
+      expect(result.matches[0].lineNumber).toBe(3);
+      expect(result.matches[0].line).toBe('find me here');
+      // Context should include surrounding lines
+      expect(result.matches[0].context).toContain('line 1');
+      expect(result.matches[0].context).toContain('line 5');
+    });
+
+    it('should return empty array for no matches', async () => {
+      const getNoteResponse = {
+        ok: true,
+        text: vi.fn().mockResolvedValue(
+          JSON.stringify({
+            id: '123',
+            body: 'some content here',
+            parent_id: 'nb-1',
+          }),
+        ),
+      };
+
+      vi.mocked(global.fetch).mockResolvedValueOnce(
+        getNoteResponse as unknown as Response,
+      );
+
+      const client = new JoplinApiClient();
+      const result = await client.notes.searchInNote(
+        '123',
+        'nonexistent pattern',
+      );
+
+      expect(result.totalMatches).toBe(0);
+      expect(result.matches).toEqual([]);
+    });
+
+    it('should perform case-insensitive matching', async () => {
+      const body = 'Hello World\nhello world\nHELLO WORLD';
+      const getNoteResponse = {
+        ok: true,
+        text: vi
+          .fn()
+          .mockResolvedValue(
+            JSON.stringify({ id: '123', body, parent_id: 'nb-1' }),
+          ),
+      };
+
+      vi.mocked(global.fetch).mockResolvedValueOnce(
+        getNoteResponse as unknown as Response,
+      );
+
+      const client = new JoplinApiClient();
+      const result = await client.notes.searchInNote('123', 'hello');
+
+      expect(result.totalMatches).toBe(3);
+    });
+  });
+
+  describe('getNoteSections', () => {
+    beforeEach(() => {
+      process.env.JOPLIN_TOKEN = 'test-token';
+      delete process.env.JOPLIN_PORT;
+      global.fetch = vi.fn();
+    });
+
+    it('should parse h1-h6 headings with correct line numbers', async () => {
+      const body = [
+        '# Title',
+        'Some text',
+        '## Section 1',
+        'More text',
+        '### Subsection 1.1',
+        '#### Deep heading',
+        '##### Deeper heading',
+        '###### Deepest heading',
+      ].join('\n');
+      const getNoteResponse = {
+        ok: true,
+        text: vi
+          .fn()
+          .mockResolvedValue(
+            JSON.stringify({ id: '123', body, parent_id: 'nb-1' }),
+          ),
+      };
+
+      vi.mocked(global.fetch).mockResolvedValueOnce(
+        getNoteResponse as unknown as Response,
+      );
+
+      const client = new JoplinApiClient();
+      const result = await client.notes.getNoteSections('123');
+
+      expect(result).toEqual([
+        { level: 1, title: 'Title', lineNumber: 1 },
+        { level: 2, title: 'Section 1', lineNumber: 3 },
+        { level: 3, title: 'Subsection 1.1', lineNumber: 5 },
+        { level: 4, title: 'Deep heading', lineNumber: 6 },
+        { level: 5, title: 'Deeper heading', lineNumber: 7 },
+        { level: 6, title: 'Deepest heading', lineNumber: 8 },
+      ]);
+    });
+
+    it('should handle notes with no headings', async () => {
+      const getNoteResponse = {
+        ok: true,
+        text: vi.fn().mockResolvedValue(
+          JSON.stringify({
+            id: '123',
+            body: 'Just plain text\nno headings here',
+            parent_id: 'nb-1',
+          }),
+        ),
+      };
+
+      vi.mocked(global.fetch).mockResolvedValueOnce(
+        getNoteResponse as unknown as Response,
+      );
+
+      const client = new JoplinApiClient();
+      const result = await client.notes.getNoteSections('123');
+
+      expect(result).toEqual([]);
+    });
+
+    it('should not match lines without space after hash', async () => {
+      const body = '#not a heading\n# Real heading\n##also not';
+      const getNoteResponse = {
+        ok: true,
+        text: vi
+          .fn()
+          .mockResolvedValue(
+            JSON.stringify({ id: '123', body, parent_id: 'nb-1' }),
+          ),
+      };
+
+      vi.mocked(global.fetch).mockResolvedValueOnce(
+        getNoteResponse as unknown as Response,
+      );
+
+      const client = new JoplinApiClient();
+      const result = await client.notes.getNoteSections('123');
+
+      expect(result).toEqual([
+        { level: 1, title: 'Real heading', lineNumber: 2 },
+      ]);
+    });
+  });
+
   describe('Pagination', () => {
     beforeEach(() => {
       process.env.JOPLIN_TOKEN = 'test-token';
@@ -1100,15 +1539,13 @@ describe('JoplinApiClient', () => {
     it('should handle tag search with pagination in findOrCreateTag', async () => {
       const noteResponse = {
         ok: true,
-        text: vi
-          .fn()
-          .mockResolvedValue(
-            JSON.stringify({
-              id: '123',
-              title: 'Test Note',
-              parent_id: 'nb-1',
-            }),
-          ),
+        text: vi.fn().mockResolvedValue(
+          JSON.stringify({
+            id: '123',
+            title: 'Test Note',
+            parent_id: 'nb-1',
+          }),
+        ),
       };
       const noteCheckResponse = {
         ok: true,

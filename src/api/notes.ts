@@ -191,4 +191,167 @@ export class NotesApi extends HttpClient {
   ): Promise<JoplinNote> {
     return this.updateNote(noteId, { parent_id: notebookId });
   }
+
+  async editNote(
+    noteId: string,
+    oldString: string,
+    newString: string,
+    replaceAll?: boolean,
+  ): Promise<{ replacements: number; context: string }> {
+    const note = await this.getNote(noteId, 'id,body,parent_id');
+    const body = note.body ?? '';
+
+    // Count occurrences
+    let count = 0;
+    let idx = 0;
+    while ((idx = body.indexOf(oldString, idx)) !== -1) {
+      count++;
+      idx += oldString.length;
+    }
+
+    if (count === 0) {
+      throw new Error('oldString not found in note');
+    }
+    if (count > 1 && !replaceAll) {
+      throw new Error(
+        `Found ${count} matches for oldString. Pass replaceAll=true to replace all, or provide a more specific string.`,
+      );
+    }
+
+    // Build new body while tracking replacement positions (char offsets in newBody)
+    const replacementOffsets: number[] = [];
+    let newBody: string;
+
+    if (replaceAll) {
+      const parts = body.split(oldString);
+      let offset = 0;
+      for (let i = 0; i < parts.length - 1; i++) {
+        offset += parts[i].length;
+        replacementOffsets.push(offset);
+        offset += newString.length;
+      }
+      newBody = parts.join(newString);
+    } else {
+      const pos = body.indexOf(oldString);
+      replacementOffsets.push(pos);
+      newBody = body.replace(oldString, () => newString);
+    }
+
+    await this.updateNote(noteId, { body: newBody });
+
+    // Build context: ~3 lines around each tracked replacement site
+    const newLines = newBody.split('\n');
+    const contextParts: string[] = [];
+
+    for (let r = 0; r < replacementOffsets.length; r++) {
+      const lineNumber = newBody
+        .substring(0, replacementOffsets[r])
+        .split('\n').length;
+      const start = Math.max(0, lineNumber - 4); // 3 lines before (0-indexed)
+      const end = Math.min(newLines.length, lineNumber + 3); // 3 lines after
+      const snippet = newLines
+        .slice(start, end)
+        .map((l: string, i: number) => `${start + i + 1}\t${l}`)
+        .join('\n');
+      contextParts.push(
+        count > 1 ? `--- replacement ${r + 1} ---\n${snippet}` : snippet,
+      );
+    }
+
+    return {
+      replacements: count,
+      context: contextParts.join('\n\n'),
+    };
+  }
+
+  async getNoteLineRange(
+    noteId: string,
+    startLine: number,
+    endLine: number,
+  ): Promise<{
+    totalLines: number;
+    startLine: number;
+    endLine: number;
+    content: string;
+  }> {
+    const note = await this.getNote(noteId, 'id,body,parent_id');
+    const lines = (note.body ?? '').split('\n');
+    const totalLines = lines.length;
+
+    // Clamp to valid range (1-indexed input)
+    const clampedStart = Math.max(1, Math.min(startLine, totalLines));
+    const clampedEnd = Math.max(clampedStart, Math.min(endLine, totalLines));
+
+    // Convert to 0-indexed for slicing
+    const slice = lines.slice(clampedStart - 1, clampedEnd);
+    const content = slice.map((l, i) => `${clampedStart + i}\t${l}`).join('\n');
+
+    return {
+      totalLines,
+      startLine: clampedStart,
+      endLine: clampedEnd,
+      content,
+    };
+  }
+
+  async searchInNote(
+    noteId: string,
+    pattern: string,
+  ): Promise<{
+    totalMatches: number;
+    matches: Array<{ line: string; lineNumber: number; context: string }>;
+  }> {
+    const note = await this.getNote(noteId, 'id,body,parent_id');
+    const lines = (note.body ?? '').split('\n');
+    const lowerPattern = pattern.toLowerCase();
+
+    const matches: Array<{
+      line: string;
+      lineNumber: number;
+      context: string;
+    }> = [];
+
+    for (let i = 0; i < lines.length; i++) {
+      if (lines[i].toLowerCase().includes(lowerPattern)) {
+        const start = Math.max(0, i - 2);
+        const end = Math.min(lines.length, i + 3);
+        const context = lines
+          .slice(start, end)
+          .map((l, j) => `${start + j + 1}\t${l}`)
+          .join('\n');
+        matches.push({
+          line: lines[i],
+          lineNumber: i + 1,
+          context,
+        });
+      }
+    }
+
+    return { totalMatches: matches.length, matches };
+  }
+
+  async getNoteSections(
+    noteId: string,
+  ): Promise<Array<{ level: number; title: string; lineNumber: number }>> {
+    const note = await this.getNote(noteId, 'id,body,parent_id');
+    const lines = (note.body ?? '').split('\n');
+    const sections: Array<{
+      level: number;
+      title: string;
+      lineNumber: number;
+    }> = [];
+
+    for (let i = 0; i < lines.length; i++) {
+      const match = lines[i].match(/^(#{1,6})\s+(.+)/);
+      if (match) {
+        sections.push({
+          level: match[1].length,
+          title: match[2],
+          lineNumber: i + 1,
+        });
+      }
+    }
+
+    return sections;
+  }
 }
