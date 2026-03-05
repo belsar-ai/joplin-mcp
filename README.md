@@ -58,6 +58,20 @@ sudo apt install bubblewrap socat ripgrep
 
 The server will fail with an error message if these are missing.
 
+### Uninstall
+
+```bash
+claude mcp remove joplin
+```
+
+```bash
+codex mcp remove joplin
+```
+
+```bash
+gemini extensions uninstall joplin-mcp
+```
+
 ## Configuration (Optional)
 
 Create `.mcp-config/joplin-mcp.toml` in your project root to scope which notebooks are visible:
@@ -75,22 +89,6 @@ notebooks = ["Notes", "Software"]
 
 The config file is discovered by walking up from the current directory (like `.git`).
 
-## Uninstall
-
-To uninstall:
-
-```bash
-claude mcp remove joplin
-```
-
-```bash
-codex mcp remove joplin
-```
-
-```bash
-gemini extensions uninstall joplin-mcp
-```
-
 ## Example Usage
 
 The AI can now handle complex requests in a single shot:
@@ -100,7 +98,7 @@ Find my notes about installing Arch Linux.
 ```
 
 ```
-Look for all notes whose last update time was before 2025. tag those as 'archived'.
+Look for all notes whose last update time was before 2025 and move them to my Archive notebook.
 ```
 
 ```
