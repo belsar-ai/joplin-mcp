@@ -84,6 +84,16 @@ describe('Broker', () => {
     ).rejects.toThrow('Invalid arguments');
   });
 
+  it('should reject updateNote with disallowed fields', async () => {
+    const client = makeMockClient();
+    const broker = new Broker(client);
+    await expect(
+      broker.execute(
+        'return await joplin.notes.updateNote("abc", { encryption_applied: 1 });',
+      ),
+    ).rejects.toThrow('Invalid arguments');
+  });
+
   it('should propagate script errors', async () => {
     const client = makeMockClient();
     const broker = new Broker(client);

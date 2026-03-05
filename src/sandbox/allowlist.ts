@@ -94,7 +94,19 @@ export const ALLOWLIST: Record<string, AllowlistEntry> = {
   'notes.updateNote': {
     arity: 2,
     schema: z
-      .tuple([z.string(), z.record(z.string(), z.unknown())])
+      .tuple([
+        z.string(),
+        z
+          .object({
+            title: z.string().optional(),
+            body: z.string().optional(),
+            parent_id: z.string().optional(),
+            is_todo: z.number().optional(),
+            todo_due: z.number().optional(),
+            todo_completed: z.number().optional(),
+          })
+          .strict(),
+      ])
       .rest(z.never()),
     dispatch: (c, a) =>
       c.notes.updateNote(a[0] as string, a[1] as Record<string, unknown>),
