@@ -8,15 +8,21 @@ Designed by belsar.ai to be easy to install & enjoyable to use.
 
 https://www.youtube.com/watch?v=B3qJa7ycqNM&t=6s
 
-## Architecture: Script Mode
+## Platform Support
 
-This MCP server uses a **Script Execution** architecture. Instead of exposing 30+ restricted tools, it exposes a single, powerful tool: `execute_joplin_script`.
+Available on macOS and Linux. Windows users should use WSL2.
 
-This allows the AI to write and execute secure JavaScript/TypeScript code to interact with your Joplin instance. This enables:
+## Architecture
 
-- **Complex Workflows:** "Find all notes tagged 'work' and append a checklist to them" (1 turn vs. 50 turns).
-- **Data Processing:** Filter, sort, and aggregate data using standard JS array methods.
-- **Efficiency:** Drastically reduces context usage and latency.
+This MCP server exposes a single, powerful tool: `execute_joplin_script`. This single-tool design follows [Anthropic's recommended pattern for MCP servers](https://www.anthropic.com/engineering/code-execution-with-mcp) and is the most performant, token-efficient way to build an MCP server today.
+
+Scripts execute in a sandboxed runner process, isolated at the OS level — more secure and more performant than a container. The runner cannot access the internet, write to the filesystem, or directly interact with anything on your system.
+
+```
+joplin api ←http→ broker (allowlisted proxy) ←stdio→ runner (sandboxed)
+```
+
+The runner calls `joplin.*` methods as if talking to Joplin directly, but all requests pass through the broker, which only permits a specific set of API methods. The broker is the only piece that can interact with your notes — and nothing else.
 
 ## Quick Start
 
@@ -37,6 +43,20 @@ gemini extensions install https://github.com/belsar-ai/joplin-mcp
 ```
 
 4. That's it. Send a test request like "Find my notes about installing Fedora linux".
+
+### Linux Requirements
+
+Install the following system packages before first use:
+
+```bash
+# Fedora
+sudo dnf install bubblewrap socat ripgrep
+
+# Ubuntu/Debian
+sudo apt install bubblewrap socat ripgrep
+```
+
+The server will fail with an error message if these are missing.
 
 ## Configuration (Optional)
 
@@ -130,24 +150,16 @@ The AI has access to a global `joplin` object with the following methods:
 - `searchInNote(id, pattern)`: Case-insensitive search within a note. Returns matches with line numbers and context.
 - `getNoteSections(id)`: Parse markdown headings into a table of contents with line numbers.
 - `deleteNote(id)`: Move to trash.
+- `moveNoteToNotebook(id, notebookId)`: Move a note to a different notebook.
 
-### Notebooks (`joplin.notebooks`)
+### Notebooks (`joplin.notebooks`) — read-only
 
 - `listNotebooks()`: Get folder structure.
-- `getNotebookTree(notebookId, depth?)`: Get formatted tree of a notebook with notes (📁/📝).
-- `getAllNotebooksTree({ exclude? })`: Get formatted tree of all notebooks (📁 only).
+- `getNotebook(id)`: Get a single notebook.
+- `getNotebookNotes(notebookId, fields?, ...)`: Get notes in a notebook.
+- `getNotebookTree(notebookId, depth?)`: Get formatted tree of a notebook with notes.
+- `getAllNotebooksTree({ exclude? })`: Get formatted tree of all notebooks.
 - `getScopedTree({ exclude?, depth? })`: Get formatted tree of scoped notebooks with notes.
-- `createNotebook(title, parentId?)`
-- `updateNotebook(id, updates)`
-- `deleteNotebook(id)`
-
-### Tags (`joplin.tags`)
-
-- `listTags()`
-- `getNotesByTagName(tagName)`: Find notes by tag name.
-- `addTagsToNote(noteId, tags)`: e.g., "urgent, work"
-- `removeTagsFromNote(noteId, tags)`
-- `createTag(title)`
 
 ## Troubleshooting
 
