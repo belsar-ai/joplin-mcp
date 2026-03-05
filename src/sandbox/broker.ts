@@ -57,7 +57,21 @@ const SANDBOX_CONFIG = {
       '~/Pictures',
     ],
     allowWrite: [] as string[],
-    denyWrite: [] as string[],
+    // Block srt's default write paths — the runner has no legitimate
+    // reason to write anywhere. Without this, /tmp/claude is writable
+    // and could be used as a sandbox escape vector.
+    denyWrite: [
+      '/dev/null',
+      '/dev/stdout',
+      '/dev/stderr',
+      '/dev/tty',
+      '/dev/dtracehelper',
+      '/dev/autofs_nowait',
+      '/tmp/claude',
+      '/private/tmp/claude',
+      '~/.npm/_logs',
+      '~/.claude',
+    ],
   },
 };
 
@@ -76,14 +90,12 @@ export class Broker {
    */
   private async initialize(): Promise<void> {
     if (this.initialized) return;
-    this.initialized = true;
 
     // Load sandbox runtime
     let srt: { SandboxManager: SandboxManagerLike };
     try {
       srt = (await import('@anthropic-ai/sandbox-runtime')) as typeof srt;
     } catch {
-      this.initialized = false;
       throw new Error(
         'Sandbox runtime (@anthropic-ai/sandbox-runtime) is not installed. ' +
           'Install it with: npm install @anthropic-ai/sandbox-runtime',
@@ -98,9 +110,11 @@ export class Broker {
     const deps = this.sandboxManager.checkDependencies();
     const allIssues = [...deps.errors, ...deps.warnings];
     if (allIssues.length > 0) {
-      this.initialized = false;
       throw new Error(`Sandbox dependencies not met: ${allIssues.join('; ')}`);
     }
+
+    // Only mark initialized after everything succeeds
+    this.initialized = true;
   }
 
   /**

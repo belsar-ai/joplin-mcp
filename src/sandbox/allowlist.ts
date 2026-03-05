@@ -113,10 +113,9 @@ export const ALLOWLIST: Record<string, AllowlistEntry> = {
   },
 
   'notes.deleteNote': {
-    arity: 2,
-    schema: z.tuple([z.string(), z.boolean().optional()]).rest(z.never()),
-    dispatch: (c, a) =>
-      c.notes.deleteNote(a[0] as string, a[1] as boolean | undefined),
+    arity: 1,
+    schema: z.tuple([z.string()]).rest(z.never()),
+    dispatch: (c, a) => c.notes.deleteNote(a[0] as string, false),
   },
 
   'notes.moveNoteToNotebook': {

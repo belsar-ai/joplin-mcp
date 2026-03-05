@@ -153,7 +153,7 @@ joplin.notes.createNote(title, body, notebookId?, tags?, isTodo?, todoDue?, todo
 joplin.notes.updateNote(id, { title?, body?, parent_id?, is_todo?, todo_due?, todo_completed? })
 joplin.notes.appendToNote(id, content) // Appends text to end
 joplin.notes.prependToNote(id, content) // Prepends text to start
-joplin.notes.deleteNote(id)
+joplin.notes.deleteNote(id) // Moves note to trash
 joplin.notes.editNote(id, oldString, newString, replaceAll?) // Server-side string replacement. Fails if oldString not found or matches multiple times (unless replaceAll=true)
 joplin.notes.getNoteLineRange(id, startLine, endLine) // Read lines by number (1-indexed)
 joplin.notes.searchInNote(id, pattern) // Case-insensitive search within a note
