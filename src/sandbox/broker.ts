@@ -34,7 +34,7 @@ interface SandboxManagerLike {
 
 const TIMEOUT_MS = 30_000;
 
-const SANDBOX_CONFIG = {
+export const SANDBOX_CONFIG = {
   network: {
     allowedDomains: [] as string[],
     deniedDomains: [] as string[],

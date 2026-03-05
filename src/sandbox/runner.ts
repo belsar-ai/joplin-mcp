@@ -5,13 +5,14 @@
  *
  * Reads an `execute` message from stdin, builds a `joplin.*.*()` proxy that
  * forwards every call as an RPC request over stdout, executes the user code
- * via the AsyncFunction constructor (supports top-level await), and writes
- * a `result` or `error` message back to stdout.
+ * inside a vm context (whitelist: only `joplin` + `console` globals), and
+ * writes a `result` or `error` message back to stdout.
  *
  * Console output is forwarded to stderr so it doesn't interfere with the
  * JSON protocol on stdout.
  */
 
+import vm from 'vm';
 import type {
   BrokerMessage,
   RpcCallMessage,
@@ -128,15 +129,14 @@ async function main(): Promise<void> {
   const joplin = buildJoplinProxy();
 
   try {
-    // AsyncFunction constructor: like Function but the body can use await
-     
-    const AsyncFunction = Object.getPrototypeOf(async function () {})
-      .constructor as new (
-      ...args: string[]
-    ) => (...args: unknown[]) => Promise<unknown>;
-
-    const fn = new AsyncFunction('joplin', 'console', execMsg.code);
-    const result = await fn(joplin, consoleProxy);
+    // Execute in a vm context — only joplin + console are available.
+    // No process, require, import, fetch, Buffer, etc.
+    // Wrapped in async IIFE for top-level await support.
+    const context = vm.createContext({ joplin, console: consoleProxy });
+    const result = await vm.runInNewContext(
+      `(async () => { ${execMsg.code} })()`,
+      context,
+    );
 
     const msg: ResultMessage = { type: 'result', value: result };
     writeLine(msg);
