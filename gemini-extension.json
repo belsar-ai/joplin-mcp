@@ -1,6 +1,6 @@
 {
   "name": "joplin-mcp",
-  "version": "2.3.0",
+  "version": "3.0.0",
   "mcpServers": {
     "joplin": {
       "command": "node",
