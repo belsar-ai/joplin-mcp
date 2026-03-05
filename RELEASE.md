@@ -59,3 +59,23 @@ A stable release should always be created from a specific, well-tested commit th
     ```
 
 This will trigger the GitHub Actions workflow to publish the stable release to npm with the `latest` tag.
+
+## Pinned Dependencies
+
+### `@anthropic-ai/sandbox-runtime`
+
+This package is **pinned to an exact version** (no `^` or `~` prefix) because it is a pre-1.0 beta where even patch bumps can change sandbox behavior — e.g., default write paths, bwrap flags, seccomp filters. A silent change here could weaken or break our security boundary.
+
+**Before each release**, check for new versions:
+
+```bash
+npm outdated @anthropic-ai/sandbox-runtime
+```
+
+If a new version is available:
+
+1. Read the changelog / diff for security-relevant changes.
+2. Update the version in `package.json` and run `npm install`.
+3. Run the full test suite including integration tests (`npx vitest run`).
+4. Verify the sandbox smoke check still passes (broker rejects unwrapped commands).
+5. Commit the update separately so it's easy to bisect if something breaks.

@@ -1,11 +1,25 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { ScriptExecutor } from './script-executor.js';
 import { JoplinApiClient } from '../api/client.js';
 
+// Mock @anthropic-ai/sandbox-runtime — env-var prefix passes smoke check
+// without needing bwrap installed (works in CI).
+vi.mock('@anthropic-ai/sandbox-runtime', () => ({
+  SandboxManager: {
+    initialize: vi.fn().mockResolvedValue(undefined),
+    checkDependencies: vi.fn().mockReturnValue({ errors: [], warnings: [] }),
+    wrapWithSandbox: vi.fn(async (cmd: string) => `bwrap=1 ${cmd}`),
+    cleanupAfterCommand: vi.fn(),
+    reset: vi.fn().mockResolvedValue(undefined),
+  },
+}));
+
 describe('ScriptExecutor', () => {
   it('should execute basic math', async () => {
-    // Mock client
-    const mockClient = {} as unknown as JoplinApiClient;
+    const mockClient = {
+      notes: {},
+      notebooks: {},
+    } as unknown as JoplinApiClient;
     const executor = new ScriptExecutor(mockClient);
 
     const result = await executor.execute('return 1 + 1;');
@@ -15,15 +29,18 @@ describe('ScriptExecutor', () => {
   it('should have access to joplin context', async () => {
     const mockClient = {
       notes: {
-        searchNotes: async (query: string) => [`Note matching ${query}`],
+        searchNotes: vi
+          .fn()
+          .mockResolvedValue([{ id: '1', title: 'Note matching foo' }]),
       },
+      notebooks: {},
     } as unknown as JoplinApiClient;
 
     const executor = new ScriptExecutor(mockClient);
 
     const script = `
       const notes = await joplin.notes.searchNotes("foo");
-      return notes[0];
+      return notes[0].title;
     `;
 
     const result = await executor.execute(script);
@@ -31,12 +48,15 @@ describe('ScriptExecutor', () => {
   });
 
   it('should handle top-level await implicitly', async () => {
-    const mockClient = {} as unknown as JoplinApiClient;
+    const mockClient = {
+      notes: {},
+      notebooks: {},
+    } as unknown as JoplinApiClient;
     const executor = new ScriptExecutor(mockClient);
 
     const script = `
-      await new Promise(resolve => setTimeout(resolve, 10));
-      return "async works";
+      const r = await Promise.resolve("async works");
+      return r;
     `;
 
     const result = await executor.execute(script);
@@ -44,7 +64,10 @@ describe('ScriptExecutor', () => {
   });
 
   it('should fail gracefully on errors', async () => {
-    const mockClient = {} as unknown as JoplinApiClient;
+    const mockClient = {
+      notes: {},
+      notebooks: {},
+    } as unknown as JoplinApiClient;
     const executor = new ScriptExecutor(mockClient);
 
     await expect(executor.execute('throw new Error("Boom")')).rejects.toThrow(

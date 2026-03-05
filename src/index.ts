@@ -83,7 +83,6 @@ WHEN TO USE:
 WHEN NOT TO USE:
 - For "all notes" → Use listAllNotes
 - Specific notebook → Use getNotebookTree (see CRITICAL section below)
-- Specific tag → Use get_notes_by_tag
 
 WORKFLOW:
 1. Construct query with OR logic + synonyms
@@ -137,12 +136,10 @@ The tree output is self-explanatory. Your ONLY response must be "Done." - DO NOT
 
 AVAILABLE API (on 'joplin' object):
 
-// NOTEBOOKS
+// NOTEBOOKS (read-only)
 joplin.notebooks.listNotebooks(fields?, orderBy?, orderDir?, limit?)
 joplin.notebooks.getNotebook(id)
-joplin.notebooks.createNotebook(title, parentId?)
-joplin.notebooks.updateNotebook(id, { title, parent_id })
-joplin.notebooks.deleteNotebook(id)
+joplin.notebooks.getNotebookNotes(notebookId, fields?, orderBy?, orderDir?, limit?)
 joplin.notebooks.getNotebookTree(notebookId, depth?) // Returns formatted tree (📁/📝). depth=undefined for full recursion, 1 for direct notes only
 joplin.notebooks.getAllNotebooksTree({ exclude? }) // Returns formatted tree of notebooks (📁 only). Respects joplin-mcp.toml scope
 joplin.notebooks.getScopedTree({ exclude?, depth? }) // Returns formatted tree of notebooks WITH notes (📁/📝). Respects scope
@@ -156,21 +153,13 @@ joplin.notes.createNote(title, body, notebookId?, tags?, isTodo?, todoDue?, todo
 joplin.notes.updateNote(id, { title?, body?, parent_id?, is_todo?, todo_due?, todo_completed? })
 joplin.notes.appendToNote(id, content) // Appends text to end
 joplin.notes.prependToNote(id, content) // Prepends text to start
-joplin.notes.deleteNote(id)
+joplin.notes.deleteNote(id) // Moves note to trash
 joplin.notes.editNote(id, oldString, newString, replaceAll?) // Server-side string replacement. Fails if oldString not found or matches multiple times (unless replaceAll=true)
 joplin.notes.getNoteLineRange(id, startLine, endLine) // Read lines by number (1-indexed)
 joplin.notes.searchInNote(id, pattern) // Case-insensitive search within a note
 joplin.notes.getNoteSections(id) // Parse markdown headings into TOC with line numbers
 
 IMPORTANT: readNote, getNoteLineRange, searchInNote, getNoteSections, and editNote return pre-formatted output. Your ONLY response must be "Done." - DO NOT repeat, summarize, or reformat the output.
-
-// TAGS
-joplin.tags.listTags()
-joplin.tags.getTagNotes(tagId)
-joplin.tags.getNotesByTagName(tagName)
-joplin.tags.addTagsToNote(noteId, "tag1,tag2")
-joplin.tags.removeTagsFromNote(noteId, "tag1,tag2")
-joplin.tags.createTag(title)
 
 EXAMPLES:
 
@@ -298,6 +287,7 @@ return "Updated due dates";
     };
 
     process.on('SIGINT', async () => {
+      await this.scriptExecutor.shutdown();
       await this.server.close();
       process.exit(0);
     });
