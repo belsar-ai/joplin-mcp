@@ -2,12 +2,12 @@ import { describe, it, expect, vi } from 'vitest';
 import { Broker } from './broker.js';
 import type { JoplinApiClient } from '../api/client.js';
 
-// Mock @anthropic-ai/sandbox-runtime — wrapWithSandbox simulates real wrapper
-// by prefixing with bwrap so the broker's sandbox smoke check passes.
+// Mock @anthropic-ai/sandbox-runtime — env-var prefix passes the broker's
+// sandbox smoke check without needing bwrap installed (works in CI).
 const mockSandboxManager = {
   initialize: vi.fn().mockResolvedValue(undefined),
   checkDependencies: vi.fn().mockReturnValue({ errors: [], warnings: [] }),
-  wrapWithSandbox: vi.fn(async (cmd: string) => `bwrap --ro-bind / / ${cmd}`),
+  wrapWithSandbox: vi.fn(async (cmd: string) => `bwrap=1 ${cmd}`),
   cleanupAfterCommand: vi.fn(),
   reset: vi.fn().mockResolvedValue(undefined),
 };

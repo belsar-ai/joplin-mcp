@@ -17,12 +17,21 @@ import { join } from 'path';
 import { Broker, SANDBOX_CONFIG } from './broker.js';
 import type { JoplinApiClient } from '../api/client.js';
 
-// Check if sandbox deps are available synchronously at module load
+// Check if sandbox actually works — checkDependencies() can pass even when
+// bwrap can't create user namespaces (e.g., GitHub Actions), so we do a
+// real smoke test: try to wrap and run a trivial command.
 let sandboxAvailable = false;
 try {
   const { SandboxManager } = await import('@anthropic-ai/sandbox-runtime');
   const deps = SandboxManager.checkDependencies();
-  sandboxAvailable = deps.errors.length === 0 && deps.warnings.length === 0;
+  if (deps.errors.length === 0 && deps.warnings.length === 0) {
+    await SandboxManager.initialize(SANDBOX_CONFIG);
+    const cmd = await SandboxManager.wrapWithSandbox('echo ok');
+    const { execSync } = await import('child_process');
+    const out = execSync(cmd, { timeout: 10_000, encoding: 'utf8' }).trim();
+    sandboxAvailable = out === 'ok';
+    await SandboxManager.reset();
+  }
 } catch {
   sandboxAvailable = false;
 }
