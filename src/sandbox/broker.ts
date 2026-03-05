@@ -55,6 +55,7 @@ const SANDBOX_CONFIG = {
       '~/Downloads',
       '~/Desktop',
       '~/Pictures',
+      '~/Library',
     ],
     allowWrite: [] as string[],
     // Block srt's default write paths — the runner has no legitimate
@@ -139,6 +140,18 @@ export class Broker {
 
     const baseCommand = `node ${runnerPath}`;
     const spawnCommand = await this.sandboxManager.wrapWithSandbox(baseCommand);
+
+    // Verify the sandbox wrapper actually wrapped the command.
+    // If wrapWithSandbox() silently returns the bare command (bug or
+    // regression), the runner would execute with full system access.
+    const hasSandbox =
+      spawnCommand.includes('bwrap') || spawnCommand.includes('sandbox-exec');
+    if (!hasSandbox) {
+      throw new Error(
+        'Sandbox wrapper did not produce a sandboxed command. ' +
+          'Refusing to execute untrusted code without OS-level isolation.',
+      );
+    }
 
     // Create temp dir for cwd
     const tmpDir = await mkdtemp(join(tmpdir(), 'joplin-sandbox-'));

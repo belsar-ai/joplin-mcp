@@ -2,15 +2,17 @@ import { describe, it, expect, vi } from 'vitest';
 import { Broker } from './broker.js';
 import type { JoplinApiClient } from '../api/client.js';
 
-// Mock @anthropic-ai/sandbox-runtime — SandboxManager passes command through unwrapped
+// Mock @anthropic-ai/sandbox-runtime — wrapWithSandbox simulates real wrapper
+// by prefixing with bwrap so the broker's sandbox smoke check passes.
+const mockSandboxManager = {
+  initialize: vi.fn().mockResolvedValue(undefined),
+  checkDependencies: vi.fn().mockReturnValue({ errors: [], warnings: [] }),
+  wrapWithSandbox: vi.fn(async (cmd: string) => `bwrap --ro-bind / / ${cmd}`),
+  cleanupAfterCommand: vi.fn(),
+  reset: vi.fn().mockResolvedValue(undefined),
+};
 vi.mock('@anthropic-ai/sandbox-runtime', () => ({
-  SandboxManager: {
-    initialize: vi.fn().mockResolvedValue(undefined),
-    checkDependencies: vi.fn().mockReturnValue({ errors: [], warnings: [] }),
-    wrapWithSandbox: vi.fn(async (cmd: string) => cmd),
-    cleanupAfterCommand: vi.fn(),
-    reset: vi.fn().mockResolvedValue(undefined),
-  },
+  SandboxManager: mockSandboxManager,
 }));
 
 function makeMockClient(
@@ -160,6 +162,18 @@ describe('Broker', () => {
     );
     expect(result).toEqual([]);
     expect(client.notebooks.listNotebooks).toHaveBeenCalled();
+  });
+
+  it('should refuse to execute if wrapWithSandbox returns unwrapped command', async () => {
+    // Simulate srt bug/regression: returns the bare command without sandbox wrapper
+    mockSandboxManager.wrapWithSandbox.mockResolvedValueOnce(
+      'node /path/to/runner.js',
+    );
+    const client = makeMockClient();
+    const broker = new Broker(client);
+    await expect(broker.execute('return 1;')).rejects.toThrow(
+      'Sandbox wrapper did not produce a sandboxed command',
+    );
   });
 
   it('should shutdown cleanly', async () => {

@@ -2,12 +2,12 @@ import { describe, it, expect, vi } from 'vitest';
 import { ScriptExecutor } from './script-executor.js';
 import { JoplinApiClient } from '../api/client.js';
 
-// Mock @anthropic-ai/sandbox-runtime
+// Mock @anthropic-ai/sandbox-runtime — prefix with bwrap to pass sandbox smoke check
 vi.mock('@anthropic-ai/sandbox-runtime', () => ({
   SandboxManager: {
     initialize: vi.fn().mockResolvedValue(undefined),
     checkDependencies: vi.fn().mockReturnValue({ errors: [], warnings: [] }),
-    wrapWithSandbox: vi.fn(async (cmd: string) => cmd),
+    wrapWithSandbox: vi.fn(async (cmd: string) => `bwrap --ro-bind / / ${cmd}`),
     cleanupAfterCommand: vi.fn(),
     reset: vi.fn().mockResolvedValue(undefined),
   },
