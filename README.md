@@ -31,7 +31,7 @@ The runner calls `joplin.*` methods as if talking to Joplin directly, but all re
 3. Pick the install command for your platform:
 
 ```bash
-claude mcp add --transport stdio joplin -- npx -y @belsar-ai/joplin-mcp
+claude mcp add --scope user --transport stdio joplin -- npx -y @belsar-ai/joplin-mcp
 ```
 
 ```bash

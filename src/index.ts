@@ -48,132 +48,39 @@ This enables complex workflows, batch processing, and "agentic" behaviors in a s
     return [
       {
         name: 'execute_joplin_script',
-        description: `Execute a JavaScript script to interact with the Joplin API.
-The script has access to a global 'joplin' object.
-You can use top-level 'await'.
-Return the result you want to see.
+        description: `Execute JS with global 'joplin' object. Top-level await. Return the result.
 
-CRITICAL SEARCH STRATEGY:
-When users ask "do you have notes about X?", DO NOT search their exact phrase. Instead, use OR logic with synonyms:
+NOTEBOOKS (read-only):
+listNotebooks(fields?, orderBy?, orderDir?, limit?)
+getNotebook(id)
+getNotebookNotes(notebookId, fields?, orderBy?, orderDir?, limit?)
+getNotebookTree(notebookId, depth?) — formatted tree
+getAllNotebooksTree({ exclude? }) — notebooks only, respects scope
+getScopedTree({ exclude?, depth? }) — notebooks + notes, respects scope
 
-Examples:
-- User: "linux installation steps" → Query: "any:1 linux install installation setup guide tutorial configure"
-- User: "project documentation" → Query: "any:1 project initiative plan documentation docs readme"
-- User: "recent work notes" → Query: "tag:work updated:month-1"
+NOTES:
+listAllNotes(fields?, includeDeleted?, orderBy?, orderDir?, limit?)
+searchNotes(query) — returns note array
+readNote(id) — formatted display with metadata + line numbers
+getNote(id) — raw object
+createNote(title, body, notebookId?, tags?, isTodo?, todoDue?, todoCompleted?)
+updateNote(id, { title?, body?, parent_id?, is_todo?, todo_due?, todo_completed? })
+appendToNote(id, content)
+prependToNote(id, content)
+deleteNote(id)
+moveNoteToNotebook(noteId, notebookId)
+editNote(id, oldString, newString, replaceAll?)
+getNoteLineRange(id, startLine, endLine)
+searchInNote(id, pattern)
+getNoteSections(id)
 
-Key syntax:
-- OR logic: "any:1 term1 term2 term3" (matches any term)
-- Wildcards: "docker*" (matches docker, dockerfile, etc.)
-- Field filters: "tag:work", "title:meeting", "notebook:Personal"
-- Date filters: "updated:month-1", "created:2024"
-- Exclude: "-archived"
+Call as joplin.notebooks.X() or joplin.notes.X().
 
-Advanced filters (less obvious but powerful):
-- resource:image/*, resource:application/pdf (specific attachment types)
-- iscompleted:0|1 (todo completion status)
-- type:note|todo (limit by note vs todo)
+SEARCH: searchNotes("any:1 term1 term2"). Use OR/synonyms, not user's literal phrase. Syntax: "any:1", "tag:X", "notebook:X", "title:X", "updated:month-1", "type:todo", "iscompleted:0", "docker*", "-excluded".
 
-NEVER DO THIS:
-- ❌ Search the user's literal question ("do you have notes about docker?")—it usually returns nothing. Always translate to broader concepts first.
-
-WHEN TO USE:
-- User asks "do you have notes about X?"
-- Searching by keywords or concepts
-
-WHEN NOT TO USE:
-- For "all notes" → Use listAllNotes
-- Specific notebook → Use getNotebookTree (see CRITICAL section below)
-
-WORKFLOW:
-1. Construct query with OR logic + synonyms
-2. Examine results (IDs and titles)
-3. Use get_note for full content
-4. If zero results, try broader terms or wildcards
-
-STRATEGIC GUIDANCE:
-
-1. Notebook Selection (Crucial):
-   - Joplin has NO default notebook. You MUST provide a 'notebookId' when creating notes.
-   - User provided a name? Use 'joplin.notebooks.listNotebooks()' to find the ID first.
-   - User didn't specify? Ask them or check 'listNotebooks()' to find a sensible default.
-
-CRITICAL - NOTEBOOK CONTENTS:
-When user asks to see contents of a notebook, ALWAYS use getNotebookTree(). Triggers:
-- "show me the layout of MyNotebook"
-- "show me the tree of MyNotebook"
-- "show me the structure of MyNotebook"
-- "show me notes in MyNotebook"
-- "what's in MyNotebook notebook"
-
-Do this in ONE script call. Use case-insensitive match. Example:
-const nb = (await joplin.notebooks.listNotebooks()).find(n => n.title.toLowerCase() === 'mynotebook');
-return await joplin.notebooks.getNotebookTree(nb.id);
-
-The tree output is self-explanatory. Your ONLY response must be "Done." - DO NOT summarize, DO NOT analyze, and DO NOT invent follow-up tasks.
-
-CRITICAL - LIST ALL NOTEBOOKS (folders only):
-When user asks to see all notebooks/folders, use getAllNotebooksTree(). Triggers:
-- "show me all notebooks"
-- "list my notebooks"
-- "what notebooks do I have"
-
-Example:
-return await joplin.notebooks.getAllNotebooksTree({ exclude: ['archive'] });
-
-The tree output is self-explanatory. Your ONLY response must be "Done." - DO NOT summarize, DO NOT analyze, and DO NOT invent follow-up tasks.
-
-CRITICAL - SHOW MY NOTES TREE (notebooks + notes):
-When user asks to see their notes tree, ALWAYS use getScopedTree(). Triggers:
-- "show my notes tree"
-- "show all my notes"
-- "show my notes"
-
-Example:
-return await joplin.notebooks.getScopedTree();
-
-This shows all scoped notebooks WITH their notes. Respects joplin-mcp.toml scope if present.
-The tree output is self-explanatory. Your ONLY response must be "Done." - DO NOT summarize, DO NOT analyze, and DO NOT invent follow-up tasks.
-
-AVAILABLE API (on 'joplin' object):
-
-// NOTEBOOKS (read-only)
-joplin.notebooks.listNotebooks(fields?, orderBy?, orderDir?, limit?)
-joplin.notebooks.getNotebook(id)
-joplin.notebooks.getNotebookNotes(notebookId, fields?, orderBy?, orderDir?, limit?)
-joplin.notebooks.getNotebookTree(notebookId, depth?) // Returns formatted tree (📁/📝). depth=undefined for full recursion, 1 for direct notes only
-joplin.notebooks.getAllNotebooksTree({ exclude? }) // Returns formatted tree of notebooks (📁 only). Respects joplin-mcp.toml scope
-joplin.notebooks.getScopedTree({ exclude?, depth? }) // Returns formatted tree of notebooks WITH notes (📁/📝). Respects scope
-
-// NOTES
-joplin.notes.listAllNotes(fields?, includeDeleted?, orderBy?, orderDir?, limit?)
-joplin.notes.searchNotes(query) // Returns array of notes
-joplin.notes.readNote(id) // Pretty-printed note with metadata header and numbered lines. Use this to display a note.
-joplin.notes.getNote(id) // Returns raw note object. Prefer readNote() for display.
-joplin.notes.createNote(title, body, notebookId?, tags?, isTodo?, todoDue?, todoCompleted?)
-joplin.notes.updateNote(id, { title?, body?, parent_id?, is_todo?, todo_due?, todo_completed? })
-joplin.notes.appendToNote(id, content) // Appends text to end
-joplin.notes.prependToNote(id, content) // Prepends text to start
-joplin.notes.deleteNote(id) // Moves note to trash
-joplin.notes.editNote(id, oldString, newString, replaceAll?) // Server-side string replacement. Fails if oldString not found or matches multiple times (unless replaceAll=true)
-joplin.notes.getNoteLineRange(id, startLine, endLine) // Read lines by number (1-indexed)
-joplin.notes.searchInNote(id, pattern) // Case-insensitive search within a note
-joplin.notes.getNoteSections(id) // Parse markdown headings into TOC with line numbers
-
-IMPORTANT: readNote, getNoteLineRange, searchInNote, getNoteSections, and editNote return pre-formatted output. Your ONLY response must be "Done." - DO NOT repeat, summarize, or reformat the output.
-
-EXAMPLES:
-
-1. Search and summarize:
-const notes = await joplin.notes.searchNotes("project alpha");
-const summaries = notes.map(n => n.title);
-return summaries;
-
-2. Batch update:
-const todos = await joplin.notes.searchNotes("type:todo iscompleted:0");
-for (const todo of todos) {
-  await joplin.notes.updateNote(todo.id, { todo_due: Date.now() + 86400000 });
-}
-return "Updated due dates";
+RULES:
+- createNote needs notebookId — call listNotebooks() first.
+- These methods return pre-formatted output: readNote, editNote, getNoteLineRange, searchInNote, getNoteSections, getNotebookTree, getAllNotebooksTree, getScopedTree. After calling them, respond only "Done." — do not repeat, summarize, or reformat the output.
 `,
         inputSchema: {
           type: 'object',
