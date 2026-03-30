@@ -164,5 +164,4 @@ The AI has access to a global `joplin` object with the following methods:
 - Verify Joplin desktop app is running
 - Confirm Web Clipper is enabled in Joplin settings
 - Ensure Joplin is listening on port 41184 (default)
-- If auto-discovery fails, set `JOPLIN_TOKEN` in your environment (add to `.bashrc` or shell config)
 - Go outside for a nice walk
