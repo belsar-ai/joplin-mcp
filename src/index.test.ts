@@ -75,6 +75,55 @@ describe('discoverJoplinToken', () => {
       );
       expect(token).toBe('test-token-windows');
     });
+
+    it('should fall back to ~/.config/joplin on macOS Homebrew installs', () => {
+      Object.defineProperty(process, 'platform', { value: 'darwin' });
+      vi.mocked(os.homedir).mockReturnValue('/Users/testuser');
+      const homebrewPath = '/Users/testuser/.config/joplin/settings.json';
+      vi.mocked(fs.existsSync).mockImplementation((p) => p === homebrewPath);
+      vi.mocked(fs.readFileSync).mockReturnValue(
+        JSON.stringify({ 'api.token': 'homebrew-token' }),
+      );
+
+      const token = discoverJoplinToken();
+
+      expect(token).toBe('homebrew-token');
+      expect(fs.readFileSync).toHaveBeenCalledWith(homebrewPath, 'utf-8');
+    });
+
+    it('should fall back to ~/.config/joplin on Linux', () => {
+      Object.defineProperty(process, 'platform', { value: 'linux' });
+      vi.mocked(os.homedir).mockReturnValue('/home/testuser');
+      const fallbackPath = '/home/testuser/.config/joplin/settings.json';
+      vi.mocked(fs.existsSync).mockImplementation((p) => p === fallbackPath);
+      vi.mocked(fs.readFileSync).mockReturnValue(
+        JSON.stringify({ 'api.token': 'linux-fallback-token' }),
+      );
+
+      const token = discoverJoplinToken();
+
+      expect(token).toBe('linux-fallback-token');
+      expect(fs.readFileSync).toHaveBeenCalledWith(fallbackPath, 'utf-8');
+    });
+
+    it('should report all attempted paths when none exist', () => {
+      Object.defineProperty(process, 'platform', { value: 'darwin' });
+      vi.mocked(os.homedir).mockReturnValue('/Users/testuser');
+      vi.mocked(fs.existsSync).mockReturnValue(false);
+
+      const token = discoverJoplinToken();
+
+      expect(token).toBeNull();
+      expect(console.error).toHaveBeenCalledWith(
+        expect.stringContaining('Joplin settings not found. Tried:'),
+      );
+      expect(console.error).toHaveBeenCalledWith(
+        expect.stringContaining('Library/Application Support/joplin-desktop'),
+      );
+      expect(console.error).toHaveBeenCalledWith(
+        expect.stringContaining('.config/joplin/settings.json'),
+      );
+    });
   });
 
   describe('File existence checks', () => {

@@ -3,61 +3,81 @@ import { join } from 'path';
 import { existsSync, readFileSync } from 'fs';
 
 /**
- * Auto-discover Joplin API token from settings.json
+ * Build the list of candidate settings.json paths for the current platform.
+ *
+ * Joplin's install method affects where settings.json lives. The native
+ * desktop app uses one location, while package managers like Homebrew place
+ * it under XDG-style ~/.config/joplin instead. We try each candidate in order.
  */
-export function discoverJoplinToken(): string | null {
-  try {
-    // Determine settings path based on OS
-    let settingsPath: string;
-    const platform = process.platform;
+function getCandidateSettingsPaths(): string[] {
+  const platform = process.platform;
+  const home = homedir();
 
-    if (platform === 'darwin') {
-      // macOS
-      settingsPath = join(
-        homedir(),
+  if (platform === 'darwin') {
+    return [
+      join(
+        home,
         'Library',
         'Application Support',
         'joplin-desktop',
         'settings.json',
-      );
-    } else if (platform === 'win32') {
-      // Windows
-      settingsPath = join(
-        process.env.APPDATA || '',
-        'joplin-desktop',
-        'settings.json',
-      );
-    } else {
-      // Linux and others
-      settingsPath = join(
-        homedir(),
-        '.config',
-        'joplin-desktop',
-        'settings.json',
-      );
-    }
+      ),
+      join(home, '.config', 'joplin', 'settings.json'),
+      join(home, '.config', 'joplin-desktop', 'settings.json'),
+    ];
+  }
 
-    // Check if settings file exists
-    if (!existsSync(settingsPath)) {
-      console.error(`[Info] Joplin settings not found at: ${settingsPath}`);
-      return null;
-    }
+  if (platform === 'win32') {
+    const appData = process.env.APPDATA || '';
+    return [
+      join(appData, 'joplin-desktop', 'settings.json'),
+      join(appData, 'joplin', 'settings.json'),
+    ];
+  }
 
-    // Read and parse settings.json
-    const settingsContent = readFileSync(settingsPath, 'utf-8');
-    const settings = JSON.parse(settingsContent);
+  return [
+    join(home, '.config', 'joplin-desktop', 'settings.json'),
+    join(home, '.config', 'joplin', 'settings.json'),
+  ];
+}
 
-    if (!settings['api.token']) {
-      console.error('[Info] API token not found in Joplin settings');
+/**
+ * Auto-discover Joplin API token from settings.json
+ */
+export function discoverJoplinToken(): string | null {
+  try {
+    const candidates = getCandidateSettingsPaths();
+    const attempted: string[] = [];
+
+    for (const settingsPath of candidates) {
+      if (!existsSync(settingsPath)) {
+        attempted.push(settingsPath);
+        continue;
+      }
+
+      const settingsContent = readFileSync(settingsPath, 'utf-8');
+      const settings = JSON.parse(settingsContent);
+
+      if (!settings['api.token']) {
+        console.error(
+          `[Info] API token not found in Joplin settings at: ${settingsPath}`,
+        );
+        console.error(
+          '[Info] Make sure Web Clipper is enabled in Joplin settings',
+        );
+        return null;
+      }
+
       console.error(
-        '[Info] Make sure Web Clipper is enabled in Joplin settings',
+        `[Info] Successfully auto-discovered Joplin API token from: ${settingsPath}`,
       );
-      return null;
+      return settings['api.token'];
     }
 
-    const token = settings['api.token'];
-    console.error('[Info] Successfully auto-discovered Joplin API token');
-    return token;
+    console.error(
+      `[Info] Joplin settings not found. Tried: ${attempted.join(', ')}`,
+    );
+    return null;
   } catch (error) {
     console.error(
       '[Warning] Failed to auto-discover Joplin token:',
