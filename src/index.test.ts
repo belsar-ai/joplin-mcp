@@ -75,6 +75,57 @@ describe('discoverJoplinToken', () => {
       );
       expect(token).toBe('test-token-windows');
     });
+
+    it('should fall back to ~/.config/joplin on macOS Homebrew installs', () => {
+      Object.defineProperty(process, 'platform', { value: 'darwin' });
+      vi.mocked(os.homedir).mockReturnValue('/Users/testuser');
+      const homebrewPath = '/Users/testuser/.config/joplin/settings.json';
+      vi.mocked(fs.existsSync).mockImplementation((p) => p === homebrewPath);
+      vi.mocked(fs.readFileSync).mockReturnValue(
+        JSON.stringify({ 'api.token': 'homebrew-token' }),
+      );
+
+      const token = discoverJoplinToken();
+
+      expect(token).toBe('homebrew-token');
+      expect(fs.readFileSync).toHaveBeenCalledWith(homebrewPath, 'utf-8');
+    });
+
+    it('should fall back to ~/.config/joplin on Linux', () => {
+      Object.defineProperty(process, 'platform', { value: 'linux' });
+      vi.mocked(os.homedir).mockReturnValue('/home/testuser');
+      const fallbackPath = '/home/testuser/.config/joplin/settings.json';
+      vi.mocked(fs.existsSync).mockImplementation((p) => p === fallbackPath);
+      vi.mocked(fs.readFileSync).mockReturnValue(
+        JSON.stringify({ 'api.token': 'linux-fallback-token' }),
+      );
+
+      const token = discoverJoplinToken();
+
+      expect(token).toBe('linux-fallback-token');
+      expect(fs.readFileSync).toHaveBeenCalledWith(fallbackPath, 'utf-8');
+    });
+
+    it('should report all attempted paths when none exist', () => {
+      Object.defineProperty(process, 'platform', { value: 'darwin' });
+      vi.mocked(os.homedir).mockReturnValue('/Users/testuser');
+      vi.mocked(fs.existsSync).mockReturnValue(false);
+
+      const token = discoverJoplinToken();
+
+      expect(token).toBeNull();
+      expect(console.error).toHaveBeenCalledWith(
+        expect.stringContaining(
+          'Could not auto-discover Joplin API token. Tried:',
+        ),
+      );
+      expect(console.error).toHaveBeenCalledWith(
+        expect.stringContaining('Library/Application Support/joplin-desktop'),
+      );
+      expect(console.error).toHaveBeenCalledWith(
+        expect.stringContaining('.config/joplin/settings.json'),
+      );
+    });
   });
 
   describe('File existence checks', () => {
@@ -90,7 +141,7 @@ describe('discoverJoplinToken', () => {
 
       expect(token).toBeNull();
       expect(console.error).toHaveBeenCalledWith(
-        expect.stringContaining('Joplin settings not found'),
+        expect.stringContaining('Could not auto-discover Joplin API token'),
       );
     });
 
@@ -102,7 +153,10 @@ describe('discoverJoplinToken', () => {
 
       expect(token).toBeNull();
       expect(console.error).toHaveBeenCalledWith(
-        expect.stringContaining('API token not found'),
+        expect.stringContaining('Could not auto-discover Joplin API token'),
+      );
+      expect(console.error).toHaveBeenCalledWith(
+        expect.stringContaining('Make sure Web Clipper is enabled'),
       );
     });
   });
@@ -134,8 +188,11 @@ describe('discoverJoplinToken', () => {
 
       expect(token).toBeNull();
       expect(console.error).toHaveBeenCalledWith(
-        expect.stringContaining('Failed to auto-discover'),
+        expect.stringContaining('Failed to read Joplin settings'),
         expect.any(String),
+      );
+      expect(console.error).toHaveBeenCalledWith(
+        expect.stringContaining('Could not auto-discover Joplin API token'),
       );
     });
 
@@ -148,9 +205,25 @@ describe('discoverJoplinToken', () => {
 
       expect(token).toBeNull();
       expect(console.error).toHaveBeenCalledWith(
-        expect.stringContaining('Failed to auto-discover'),
+        expect.stringContaining('Failed to read Joplin settings'),
         expect.stringContaining('Permission denied'),
       );
+    });
+
+    it('should skip a candidate with a parse error and use a later valid one', () => {
+      const stalePath = '/home/testuser/.config/joplin-desktop/settings.json';
+      const validPath = '/home/testuser/.config/joplin/settings.json';
+      vi.mocked(fs.existsSync).mockReturnValue(true);
+      vi.mocked(fs.readFileSync).mockImplementation((p) => {
+        if (p === stalePath) return '{ invalid json }';
+        if (p === validPath)
+          return JSON.stringify({ 'api.token': 'recovered-token' });
+        throw new Error(`unexpected path: ${String(p)}`);
+      });
+
+      const token = discoverJoplinToken();
+
+      expect(token).toBe('recovered-token');
     });
   });
 
@@ -161,7 +234,7 @@ describe('discoverJoplinToken', () => {
       vi.mocked(fs.existsSync).mockReturnValue(true);
     });
 
-    it('should return null when api.token is missing', () => {
+    it('should return null when api.token is missing from all candidates', () => {
       vi.mocked(fs.readFileSync).mockReturnValue(
         JSON.stringify({ 'some.other.key': 'value' }),
       );
@@ -170,8 +243,25 @@ describe('discoverJoplinToken', () => {
 
       expect(token).toBeNull();
       expect(console.error).toHaveBeenCalledWith(
-        expect.stringContaining('API token not found'),
+        expect.stringContaining('Could not auto-discover Joplin API token'),
       );
+    });
+
+    it('should skip a candidate missing api.token and use a later valid one', () => {
+      const stalePath = '/home/testuser/.config/joplin-desktop/settings.json';
+      const validPath = '/home/testuser/.config/joplin/settings.json';
+      vi.mocked(fs.existsSync).mockReturnValue(true);
+      vi.mocked(fs.readFileSync).mockImplementation((p) => {
+        if (p === stalePath)
+          return JSON.stringify({ 'some.other.key': 'value' });
+        if (p === validPath)
+          return JSON.stringify({ 'api.token': 'fallback-token' });
+        throw new Error(`unexpected path: ${String(p)}`);
+      });
+
+      const token = discoverJoplinToken();
+
+      expect(token).toBe('fallback-token');
     });
 
     it('should handle empty string token', () => {
