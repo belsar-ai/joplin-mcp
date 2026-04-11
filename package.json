@@ -1,6 +1,6 @@
 {
   "name": "@belsar-ai/joplin-mcp",
-  "version": "3.0.2",
+  "version": "4.0.0",
   "type": "module",
   "description": "Model Context Protocol (MCP) server for Joplin note-taking app",
   "main": "dist/index.js",
