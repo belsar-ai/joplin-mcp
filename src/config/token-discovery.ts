@@ -51,32 +51,42 @@ export function discoverJoplinToken(): string | null {
 
     for (const settingsPath of candidates) {
       if (!existsSync(settingsPath)) {
-        attempted.push(settingsPath);
+        attempted.push(`${settingsPath} (not found)`);
         continue;
       }
 
-      const settingsContent = readFileSync(settingsPath, 'utf-8');
-      const settings = JSON.parse(settingsContent);
+      // A single corrupt or token-less file must not abort discovery —
+      // a later candidate may still hold the real token (e.g. stale
+      // native settings.json alongside a working Homebrew install).
+      let settings: Record<string, unknown>;
+      try {
+        const settingsContent = readFileSync(settingsPath, 'utf-8');
+        settings = JSON.parse(settingsContent);
+      } catch (error) {
+        console.error(
+          `[Warning] Failed to read Joplin settings at ${settingsPath}:`,
+          error instanceof Error ? error.message : error,
+        );
+        attempted.push(`${settingsPath} (read/parse error)`);
+        continue;
+      }
 
-      if (!settings['api.token']) {
-        console.error(
-          `[Info] API token not found in Joplin settings at: ${settingsPath}`,
-        );
-        console.error(
-          '[Info] Make sure Web Clipper is enabled in Joplin settings',
-        );
-        return null;
+      const token = settings?.['api.token'];
+      if (typeof token !== 'string' || token === '') {
+        attempted.push(`${settingsPath} (api.token missing)`);
+        continue;
       }
 
       console.error(
         `[Info] Successfully auto-discovered Joplin API token from: ${settingsPath}`,
       );
-      return settings['api.token'];
+      return token;
     }
 
     console.error(
-      `[Info] Joplin settings not found. Tried: ${attempted.join(', ')}`,
+      `[Info] Could not auto-discover Joplin API token. Tried: ${attempted.join(', ')}`,
     );
+    console.error('[Info] Make sure Web Clipper is enabled in Joplin settings');
     return null;
   } catch (error) {
     console.error(
