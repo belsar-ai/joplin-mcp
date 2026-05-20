@@ -39,7 +39,7 @@ codex mcp add joplin -- npx -y @belsar-ai/joplin-mcp
 ```
 
 ```bash
-gemini extensions install https://github.com/belsar-ai/joplin-mcp
+agy plugin install https://github.com/belsar-ai/joplin-mcp
 ```
 
 4. That's it. Send a test request like "Find my notes about installing Fedora linux".
@@ -66,6 +66,10 @@ claude mcp remove joplin
 
 ```bash
 codex mcp remove joplin
+```
+
+```bash
+agy plugin uninstall joplin-mcp
 ```
 
 ```bash
