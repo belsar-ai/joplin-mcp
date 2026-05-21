@@ -1,8 +1,10 @@
 #!/usr/bin/env node
 
-import { JoplinServer } from './index.js';
+import { JoplinServer, determineReadOnly } from './index.js';
 
-const server = new JoplinServer();
+const isReadOnly = determineReadOnly(process.argv, process.env);
+
+const server = new JoplinServer({ readOnly: isReadOnly });
 
 server.run().catch((error) => {
   console.error('[Fatal] Failed to start Joplin MCP server:', error);

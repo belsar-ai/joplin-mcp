@@ -186,6 +186,33 @@ describe('Broker', () => {
     );
   });
 
+  describe('Read-Only Mode Constraints', () => {
+    it('should allow read-only calls in read-only mode', async () => {
+      const client = makeMockClient();
+      const broker = new Broker(client);
+      const result = await broker.execute(
+        'return await joplin.notes.readNote("abc");',
+        { readOnly: true },
+      );
+      expect(result).toBe('# Hello\nWorld');
+      expect(client.notes.readNote).toHaveBeenCalledWith('abc');
+    });
+
+    it('should block modifying/destructive calls in read-only mode', async () => {
+      const client = makeMockClient();
+      const broker = new Broker(client);
+      await expect(
+        broker.execute(
+          'return await joplin.notes.createNote("title", "body");',
+          { readOnly: true },
+        ),
+      ).rejects.toThrow(
+        'Method not allowed in read-only mode: notes.createNote',
+      );
+      expect(client.notes.createNote).not.toHaveBeenCalled();
+    });
+  });
+
   it('should shutdown cleanly', async () => {
     const client = makeMockClient();
     const broker = new Broker(client);

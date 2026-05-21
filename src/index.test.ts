@@ -1,11 +1,43 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { discoverJoplinToken, JoplinApiClient } from './index.js';
+import {
+  discoverJoplinToken,
+  JoplinApiClient,
+  JoplinServer,
+  determineReadOnly,
+} from './index.js';
 import * as fs from 'fs';
 import * as os from 'os';
 
 // Mock the fs and os modules
 vi.mock('fs');
 vi.mock('os');
+
+const { mockSetRequestHandler, mockExecute } = vi.hoisted(() => {
+  return {
+    mockSetRequestHandler: vi.fn(),
+    mockExecute: vi.fn(),
+  };
+});
+
+vi.mock('@modelcontextprotocol/sdk/server/index.js', () => {
+  return {
+    Server: class {
+      setRequestHandler = mockSetRequestHandler;
+      onerror = vi.fn();
+      connect = vi.fn().mockResolvedValue(undefined);
+      close = vi.fn().mockResolvedValue(undefined);
+    },
+  };
+});
+
+vi.mock('./mcp/script-executor.js', () => {
+  return {
+    ScriptExecutor: class {
+      execute = mockExecute;
+      shutdown = vi.fn().mockResolvedValue(undefined);
+    },
+  };
+});
 
 describe('discoverJoplinToken', () => {
   const originalPlatform = process.platform;
@@ -1781,5 +1813,130 @@ describe('JoplinApiClient', () => {
       // Should search for tag, not find it, create it, and associate it
       expect(global.fetch).toHaveBeenCalledTimes(5);
     });
+  });
+});
+
+describe('JoplinServer', () => {
+  let listToolsHandler: () => Promise<{
+    tools: Array<{
+      name: string;
+      description: string;
+      inputSchema: Record<string, unknown>;
+    }>;
+  }>;
+  let callToolHandler: (request: {
+    params: { name: string; arguments?: { script: string } };
+  }) => Promise<{
+    content: Array<{ type: string; text: string }>;
+    isError?: boolean;
+  }>;
+
+  beforeEach(() => {
+    mockSetRequestHandler.mockClear();
+    mockExecute.mockClear();
+
+    // Capture the handlers registered by JoplinServer
+    mockSetRequestHandler.mockImplementation((schema, handler) => {
+      const method = schema.shape?.method?.value;
+      if (method === 'tools/list') {
+        listToolsHandler = handler as typeof listToolsHandler;
+      } else if (method === 'tools/call') {
+        callToolHandler = handler as typeof callToolHandler;
+      }
+    });
+  });
+
+  it('should register both tools by default (read-write mode)', async () => {
+    new JoplinServer();
+    expect(mockSetRequestHandler).toHaveBeenCalledTimes(2);
+
+    const toolsRes = await listToolsHandler();
+    expect(toolsRes.tools).toHaveLength(2);
+    expect(toolsRes.tools[0].name).toBe('execute_joplin_readonly_script');
+    expect(toolsRes.tools[1].name).toBe('execute_joplin_script');
+  });
+
+  it('should register only the read-only tool in read-only lock mode', async () => {
+    new JoplinServer({ readOnly: true });
+    expect(mockSetRequestHandler).toHaveBeenCalledTimes(2);
+
+    const toolsRes = await listToolsHandler();
+    expect(toolsRes.tools).toHaveLength(1);
+    expect(toolsRes.tools[0].name).toBe('execute_joplin_readonly_script');
+  });
+
+  it('should route execute_joplin_readonly_script to scriptExecutor with readOnly constraint', async () => {
+    new JoplinServer();
+    mockExecute.mockResolvedValue('readonly-ok');
+
+    const result = await callToolHandler({
+      params: {
+        name: 'execute_joplin_readonly_script',
+        arguments: { script: 'return 1;' },
+      },
+    });
+
+    expect(mockExecute).toHaveBeenCalledWith('return 1;', { readOnly: true });
+    expect(result.content[0].text).toBe('readonly-ok');
+  });
+
+  it('should route execute_joplin_script to scriptExecutor with readOnly false in default mode', async () => {
+    new JoplinServer();
+    mockExecute.mockResolvedValue('write-ok');
+
+    const result = await callToolHandler({
+      params: {
+        name: 'execute_joplin_script',
+        arguments: { script: 'return 1;' },
+      },
+    });
+
+    expect(mockExecute).toHaveBeenCalledWith('return 1;', { readOnly: false });
+    expect(result.content[0].text).toBe('write-ok');
+  });
+
+  it('should reject execute_joplin_script in read-only lock mode', async () => {
+    new JoplinServer({ readOnly: true });
+
+    const result = await callToolHandler({
+      params: {
+        name: 'execute_joplin_script',
+        arguments: { script: 'return 1;' },
+      },
+    });
+
+    expect(result.isError).toBe(true);
+    expect(result.content[0].text).toContain(
+      'not allowed when server is in read-only mode',
+    );
+    expect(mockExecute).not.toHaveBeenCalled();
+  });
+});
+
+describe('determineReadOnly', () => {
+  it('should return false by default when no args or env vars are set', () => {
+    expect(determineReadOnly([], {})).toBe(false);
+  });
+
+  it('should return true when --readonly is in argv', () => {
+    expect(determineReadOnly(['--readonly'], {})).toBe(true);
+    expect(determineReadOnly(['node', 'cli.js', '--readonly'], {})).toBe(true);
+  });
+
+  it('should return true for truthy env values', () => {
+    expect(determineReadOnly([], { JOPLIN_READONLY: 'true' })).toBe(true);
+    expect(determineReadOnly([], { JOPLIN_READONLY: '1' })).toBe(true);
+    expect(determineReadOnly([], { JOPLIN_READONLY: 'yes' })).toBe(true);
+    expect(determineReadOnly([], { JOPLIN_READONLY: 'on' })).toBe(true);
+    expect(determineReadOnly([], { JOPLIN_READONLY: 'arbitrary' })).toBe(true);
+  });
+
+  it('should return false for explicitly falsy env values', () => {
+    expect(determineReadOnly([], { JOPLIN_READONLY: 'false' })).toBe(false);
+    expect(determineReadOnly([], { JOPLIN_READONLY: '0' })).toBe(false);
+    expect(determineReadOnly([], { JOPLIN_READONLY: 'no' })).toBe(false);
+    expect(determineReadOnly([], { JOPLIN_READONLY: 'off' })).toBe(false);
+    expect(determineReadOnly([], { JOPLIN_READONLY: '' })).toBe(false);
+    expect(determineReadOnly([], { JOPLIN_READONLY: '  ' })).toBe(false);
   });
 });

@@ -8,8 +8,11 @@ export class ScriptExecutor {
     this.broker = new Broker(client);
   }
 
-  async execute(code: string): Promise<unknown> {
-    return this.broker.execute(code);
+  async execute(
+    code: string,
+    options?: { readOnly?: boolean },
+  ): Promise<unknown> {
+    return this.broker.execute(code, options);
   }
 
   async shutdown(): Promise<void> {

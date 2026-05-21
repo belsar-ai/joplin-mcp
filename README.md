@@ -14,7 +14,12 @@ Available on macOS and Linux. Windows users should use WSL2.
 
 ## Architecture
 
-This MCP server exposes a single, powerful tool: `execute_joplin_script`. This single-tool design follows [Anthropic's recommended pattern for MCP servers](https://www.anthropic.com/engineering/code-execution-with-mcp) and is the most performant, token-efficient way to build an MCP server today.
+By default, this MCP server exposes two tools:
+
+- `execute_joplin_readonly_script`: For running scripts in read-only mode (inspecting/reading notes and notebooks).
+- `execute_joplin_script`: For running scripts that can also perform modifications, creations, or deletions.
+
+This script-based execution pattern follows [Anthropic's recommended pattern for MCP servers](https://www.anthropic.com/engineering/code-execution-with-mcp) and is the most performant, token-efficient way to build an MCP server today.
 
 Scripts execute in a sandboxed runner process, isolated at the OS level — more secure and more performant than a container. The runner cannot access the internet, write to the filesystem, or directly interact with anything on your system.
 
@@ -78,6 +83,8 @@ gemini extensions uninstall joplin-mcp
 
 ## Configuration (Optional)
 
+### Notebook Scope Config
+
 Create `.mcp-config/joplin-mcp.toml` in your project root to scope which notebooks are visible:
 
 ```toml
@@ -92,6 +99,18 @@ notebooks = ["Notes", "Software"]
 - `scope.notebooks`: Only these notebooks are visible to the AI
 
 The config file is discovered by walking up from the current directory (like `.git`).
+
+### Read-Only Lock Mode
+
+You can lock the MCP server down to a strict read-only mode so that no notes or notebooks can be modified, created, or deleted. In this mode, only the `execute_joplin_readonly_script` tool is exposed to the AI, and any attempts to execute write operations are blocked at the process level.
+
+Configure read-only mode in one of two ways:
+
+1. **CLI Flag**: Append `--readonly` to your start command:
+   ```bash
+   npx -y @belsar-ai/joplin-mcp --readonly
+   ```
+2. **Environment Variable**: Set `JOPLIN_READONLY=true` (any value other than `false`, `0`, `no`, `off`, or empty string will enable lock mode).
 
 ## Example Usage
 

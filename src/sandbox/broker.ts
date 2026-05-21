@@ -121,7 +121,10 @@ export class Broker {
   /**
    * Execute a script in a sandboxed runner process.
    */
-  async execute(code: string): Promise<unknown> {
+  async execute(
+    code: string,
+    options?: { readOnly?: boolean },
+  ): Promise<unknown> {
     await this.initialize();
 
     // Resolve runner.js — always use the compiled dist/ version since
@@ -207,7 +210,9 @@ export class Broker {
 
             if (msg.type === 'rpc_call') {
               // Dispatch through allowlist
-              dispatchAllowedCall(this.client, msg.method, msg.args)
+              dispatchAllowedCall(this.client, msg.method, msg.args, {
+                readOnly: options?.readOnly,
+              })
                 .then((result) => {
                   const resp: RpcResultMessage = {
                     type: 'rpc_result',

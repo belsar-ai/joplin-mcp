@@ -18,6 +18,7 @@ export interface AllowlistEntry {
   schema: z.ZodType;
   arity: number; // expected tuple length (for padding short args arrays)
   dispatch: (client: JoplinApiClient, args: unknown[]) => Promise<unknown>;
+  readOnly: boolean;
 }
 
 // ── Allowlist ──
@@ -27,6 +28,7 @@ export const ALLOWLIST: Record<string, AllowlistEntry> = {
 
   'notes.listAllNotes': {
     arity: 5,
+    readOnly: true,
     schema: z
       .tuple([
         z.string().optional(),
@@ -48,6 +50,7 @@ export const ALLOWLIST: Record<string, AllowlistEntry> = {
 
   'notes.searchNotes': {
     arity: 2,
+    readOnly: true,
     schema: z.tuple([z.string(), z.string().optional()]).rest(z.never()),
     dispatch: (c, a) =>
       c.notes.searchNotes(a[0] as string, a[1] as string | undefined),
@@ -55,6 +58,7 @@ export const ALLOWLIST: Record<string, AllowlistEntry> = {
 
   'notes.getNote': {
     arity: 2,
+    readOnly: true,
     schema: z.tuple([z.string(), z.string().optional()]).rest(z.never()),
     dispatch: (c, a) =>
       c.notes.getNote(a[0] as string, a[1] as string | undefined),
@@ -62,12 +66,14 @@ export const ALLOWLIST: Record<string, AllowlistEntry> = {
 
   'notes.readNote': {
     arity: 1,
+    readOnly: true,
     schema: z.tuple([z.string()]).rest(z.never()),
     dispatch: (c, a) => c.notes.readNote(a[0] as string),
   },
 
   'notes.createNote': {
     arity: 7,
+    readOnly: false,
     schema: z
       .tuple([
         z.string(),
@@ -93,6 +99,7 @@ export const ALLOWLIST: Record<string, AllowlistEntry> = {
 
   'notes.updateNote': {
     arity: 2,
+    readOnly: false,
     schema: z
       .tuple([
         z.string(),
@@ -114,24 +121,28 @@ export const ALLOWLIST: Record<string, AllowlistEntry> = {
 
   'notes.appendToNote': {
     arity: 2,
+    readOnly: false,
     schema: z.tuple([z.string(), z.string()]).rest(z.never()),
     dispatch: (c, a) => c.notes.appendToNote(a[0] as string, a[1] as string),
   },
 
   'notes.prependToNote': {
     arity: 2,
+    readOnly: false,
     schema: z.tuple([z.string(), z.string()]).rest(z.never()),
     dispatch: (c, a) => c.notes.prependToNote(a[0] as string, a[1] as string),
   },
 
   'notes.deleteNote': {
     arity: 1,
+    readOnly: false,
     schema: z.tuple([z.string()]).rest(z.never()),
     dispatch: (c, a) => c.notes.deleteNote(a[0] as string, false),
   },
 
   'notes.moveNoteToNotebook': {
     arity: 2,
+    readOnly: false,
     schema: z.tuple([z.string(), z.string()]).rest(z.never()),
     dispatch: (c, a) =>
       c.notes.moveNoteToNotebook(a[0] as string, a[1] as string),
@@ -139,6 +150,7 @@ export const ALLOWLIST: Record<string, AllowlistEntry> = {
 
   'notes.editNote': {
     arity: 4,
+    readOnly: false,
     schema: z
       .tuple([z.string(), z.string(), z.string(), z.boolean().optional()])
       .rest(z.never()),
@@ -153,6 +165,7 @@ export const ALLOWLIST: Record<string, AllowlistEntry> = {
 
   'notes.getNoteLineRange': {
     arity: 3,
+    readOnly: true,
     schema: z.tuple([z.string(), z.number(), z.number()]).rest(z.never()),
     dispatch: (c, a) =>
       c.notes.getNoteLineRange(a[0] as string, a[1] as number, a[2] as number),
@@ -160,12 +173,14 @@ export const ALLOWLIST: Record<string, AllowlistEntry> = {
 
   'notes.searchInNote': {
     arity: 2,
+    readOnly: true,
     schema: z.tuple([z.string(), z.string()]).rest(z.never()),
     dispatch: (c, a) => c.notes.searchInNote(a[0] as string, a[1] as string),
   },
 
   'notes.getNoteSections': {
     arity: 1,
+    readOnly: true,
     schema: z.tuple([z.string()]).rest(z.never()),
     dispatch: (c, a) => c.notes.getNoteSections(a[0] as string),
   },
@@ -174,6 +189,7 @@ export const ALLOWLIST: Record<string, AllowlistEntry> = {
 
   'notebooks.listNotebooks': {
     arity: 4,
+    readOnly: true,
     schema: z
       .tuple([
         z.string().optional(),
@@ -193,6 +209,7 @@ export const ALLOWLIST: Record<string, AllowlistEntry> = {
 
   'notebooks.getNotebook': {
     arity: 2,
+    readOnly: true,
     schema: z.tuple([z.string(), z.string().optional()]).rest(z.never()),
     dispatch: (c, a) =>
       c.notebooks.getNotebook(a[0] as string, a[1] as string | undefined),
@@ -200,6 +217,7 @@ export const ALLOWLIST: Record<string, AllowlistEntry> = {
 
   'notebooks.getNotebookNotes': {
     arity: 5,
+    readOnly: true,
     schema: z
       .tuple([
         z.string(),
@@ -221,6 +239,7 @@ export const ALLOWLIST: Record<string, AllowlistEntry> = {
 
   'notebooks.getNotebookTree': {
     arity: 2,
+    readOnly: true,
     schema: z.tuple([z.string(), z.number().optional()]).rest(z.never()),
     dispatch: (c, a) =>
       c.notebooks.getNotebookTree(a[0] as string, a[1] as number | undefined),
@@ -228,6 +247,7 @@ export const ALLOWLIST: Record<string, AllowlistEntry> = {
 
   'notebooks.getAllNotebooksTree': {
     arity: 1,
+    readOnly: true,
     schema: z
       .tuple([z.object({ exclude: z.array(z.string()).optional() }).optional()])
       .rest(z.never()),
@@ -239,6 +259,7 @@ export const ALLOWLIST: Record<string, AllowlistEntry> = {
 
   'notebooks.getScopedTree': {
     arity: 1,
+    readOnly: true,
     schema: z
       .tuple([
         z
@@ -264,10 +285,15 @@ export async function dispatchAllowedCall(
   client: JoplinApiClient,
   method: string,
   args: unknown[],
+  options?: { readOnly?: boolean },
 ): Promise<unknown> {
   const entry = ALLOWLIST[method];
   if (!entry) {
     throw new Error(`Method not allowed: ${method}`);
+  }
+
+  if (options?.readOnly && !entry.readOnly) {
+    throw new Error(`Method not allowed in read-only mode: ${method}`);
   }
 
   // Pad args to expected arity (Zod tuples require exact length)
