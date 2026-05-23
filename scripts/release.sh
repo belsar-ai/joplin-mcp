@@ -76,7 +76,7 @@ if [[ "$DRY_RUN" == true ]]; then
     echo ""
     echo "Would update:"
     echo "  - package.json: $CURRENT_VERSION -> $NEW_VERSION"
-    echo "  - gemini-extension.json: $CURRENT_VERSION -> $NEW_VERSION"
+    echo "  - .claude-plugin/plugin.json: $CURRENT_VERSION -> $NEW_VERSION"
     echo ""
     echo "Would create:"
     echo "  - Git commit: 'Release v$NEW_VERSION'"
@@ -88,12 +88,12 @@ fi
 echo -e "${BLUE}📝 Updating package.json...${NC}"
 npm version "$NEW_VERSION" --no-git-tag-version --allow-same-version > /dev/null 2>&1
 
-# Update gemini-extension.json if it exists
-if [[ -f "$PROJECT_ROOT/gemini-extension.json" ]]; then
-    echo -e "${BLUE}📝 Updating gemini-extension.json...${NC}"
+# Update .claude-plugin/plugin.json if it exists
+if [[ -f "$PROJECT_ROOT/.claude-plugin/plugin.json" ]]; then
+    echo -e "${BLUE}📝 Updating .claude-plugin/plugin.json...${NC}"
     node -e "
         const fs = require('fs');
-        const path = '$PROJECT_ROOT/gemini-extension.json';
+        const path = '$PROJECT_ROOT/.claude-plugin/plugin.json';
         const ext = JSON.parse(fs.readFileSync(path, 'utf8'));
         ext.version = '$NEW_VERSION';
         fs.writeFileSync(path, JSON.stringify(ext, null, 2) + '\n');
@@ -103,7 +103,7 @@ fi
 # Stage changes
 echo -e "${BLUE}💾 Staging changes...${NC}"
 git add package.json package-lock.json 2>/dev/null || true
-git add gemini-extension.json 2>/dev/null || true
+git add .claude-plugin/plugin.json 2>/dev/null || true
 
 # Create commit
 echo -e "${BLUE}💾 Creating commit...${NC}"

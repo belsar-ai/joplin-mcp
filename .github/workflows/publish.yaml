@@ -53,12 +53,12 @@ jobs:
       - name: Publish to npm (using OIDC Trusted Publisher)
         run: npm publish --tag ${{ steps.npm-tag.outputs.tag }}
 
-      - name: Update extension version from tag
+      - name: Update plugin version from tag
         run: |
           VERSION=$(echo ${{ github.ref_name }} | sed 's/v//')
-          sed -i "s/\"version\": \".*\"/\"version\": \"$VERSION\"/" gemini-extension.json
+          sed -i "s/\"version\": \".*\"/\"version\": \"$VERSION\"/" .claude-plugin/plugin.json
 
-      - name: Create release tarball for gemini-cli
+      - name: Create release tarball
         run: tar -czf ../joplin-mcp-release.tar.gz --exclude='.git' --exclude='.github' --exclude='tests' . && mv ../joplin-mcp-release.tar.gz .
 
       - name: Create GitHub Release
