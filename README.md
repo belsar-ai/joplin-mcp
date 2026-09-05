@@ -21,7 +21,7 @@ By default, this MCP server exposes two tools:
 
 This script-based execution pattern follows [Anthropic's recommended pattern for MCP servers](https://www.anthropic.com/engineering/code-execution-with-mcp) and is the most performant, token-efficient way to build an MCP server today.
 
-Scripts execute in a sandboxed runner process, isolated at the OS level — more secure and more performant than a container. The runner cannot access the internet, write to the filesystem, or directly interact with anything on your system.
+Scripts execute in a separate runner process isolated at the OS level by [Anthropic Sandbox Runtime](https://github.com/anthropic-experimental/sandbox-runtime). `node:vm` limits the globals available inside that process; the Sandbox Runtime is the security boundary that blocks network access and filesystem writes.
 
 ```
 joplin api ←http→ broker (allowlisted proxy) ←stdio→ runner (sandboxed)
@@ -33,18 +33,31 @@ The runner calls `joplin.*` methods as if talking to Joplin directly, but all re
 
 1. Open Joplin & navigate to tools > web clipper > enable web clipper service
 2. The Joplin app needs to remain running (minimized is fine)
-3. Pick the install command for your platform:
+3. Add the server to your MCP client:
+
+Claude Code:
 
 ```bash
 claude mcp add --scope user --transport stdio joplin -- npx -y @belsar-ai/joplin-mcp
 ```
 
+Codex:
+
 ```bash
 codex mcp add joplin -- npx -y @belsar-ai/joplin-mcp
 ```
 
-```bash
-agy plugin install https://github.com/belsar-ai/joplin-mcp
+Agy: add this entry to `~/.gemini/config/mcp_config.json` (or configure the same stdio server through `/mcp`):
+
+```json
+{
+  "mcpServers": {
+    "joplin": {
+      "command": "npx",
+      "args": ["-y", "@belsar-ai/joplin-mcp"]
+    }
+  }
+}
 ```
 
 4. That's it. Send a test request like "Find my notes about installing Fedora linux".
@@ -74,11 +87,7 @@ codex mcp remove joplin
 ```
 
 ```bash
-agy plugin uninstall joplin-mcp
-```
-
-```bash
-gemini extensions uninstall joplin-mcp
+agy mcp remove joplin
 ```
 
 ## Configuration (Optional)

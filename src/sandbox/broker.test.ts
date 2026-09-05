@@ -7,7 +7,10 @@ import type { JoplinApiClient } from '../api/client.js';
 const mockSandboxManager = {
   initialize: vi.fn().mockResolvedValue(undefined),
   checkDependencies: vi.fn().mockReturnValue({ errors: [], warnings: [] }),
-  wrapWithSandbox: vi.fn(async (cmd: string) => `bwrap=1 ${cmd}`),
+  wrapWithSandboxArgv: vi.fn(async (cmd: string) => ({
+    argv: ['/bin/bash', '-c', `bwrap=1 ${cmd}`],
+    env: process.env,
+  })),
   cleanupAfterCommand: vi.fn(),
   reset: vi.fn().mockResolvedValue(undefined),
 };
@@ -121,6 +124,25 @@ describe('Broker', () => {
     ).toBe('1');
   });
 
+  it('should handle concurrent RPC calls with out-of-order responses', async () => {
+    const client = makeMockClient({
+      readNote: vi.fn(async (id: string) => {
+        if (id === 'first') {
+          await new Promise((resolve) => setTimeout(resolve, 20));
+        }
+        return id;
+      }),
+    });
+    const broker = new Broker(client);
+    const result = await broker.execute(`
+      return await Promise.all([
+        joplin.notes.readNote("first"),
+        joplin.notes.readNote("second"),
+      ]);
+    `);
+    expect(result).toEqual(['first', 'second']);
+  });
+
   it('should propagate API errors', async () => {
     const client = makeMockClient({
       readNote: vi
@@ -174,11 +196,12 @@ describe('Broker', () => {
     expect(client.notebooks.listNotebooks).toHaveBeenCalled();
   });
 
-  it('should refuse to execute if wrapWithSandbox returns unwrapped command', async () => {
+  it('should refuse to execute if the runtime returns an unwrapped command', async () => {
     // Simulate srt bug/regression: returns the bare command without sandbox wrapper
-    mockSandboxManager.wrapWithSandbox.mockResolvedValueOnce(
-      'node /path/to/runner.js',
-    );
+    mockSandboxManager.wrapWithSandboxArgv.mockResolvedValueOnce({
+      argv: ['/bin/bash', '-c', 'node /path/to/runner.js'],
+      env: process.env,
+    });
     const client = makeMockClient();
     const broker = new Broker(client);
     await expect(broker.execute('return 1;')).rejects.toThrow(

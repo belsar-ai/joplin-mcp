@@ -10,10 +10,10 @@
  */
 
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
-import { spawn } from 'child_process';
-import { writeFile, mkdtemp, rm } from 'fs/promises';
-import { tmpdir, homedir } from 'os';
-import { join } from 'path';
+import { spawn } from 'node:child_process';
+import { mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { homedir, tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { Broker, SANDBOX_CONFIG } from './broker.js';
 import type { JoplinApiClient } from '../api/client.js';
 
@@ -27,7 +27,7 @@ try {
   if (deps.errors.length === 0 && deps.warnings.length === 0) {
     await SandboxManager.initialize(SANDBOX_CONFIG);
     const cmd = await SandboxManager.wrapWithSandbox('echo ok');
-    const { execSync } = await import('child_process');
+    const { execSync } = await import('node:child_process');
     const out = execSync(cmd, { timeout: 10_000, encoding: 'utf8' }).trim();
     sandboxAvailable = out === 'ok';
     await SandboxManager.reset();

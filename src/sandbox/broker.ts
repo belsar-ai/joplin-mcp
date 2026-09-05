@@ -9,11 +9,12 @@
  * Requires @anthropic-ai/sandbox-runtime — throws if not installed (fail-closed).
  */
 
-import { spawn, type ChildProcess } from 'child_process';
-import { mkdtemp, rm } from 'fs/promises';
-import { tmpdir } from 'os';
-import { join, dirname } from 'path';
-import { fileURLToPath } from 'url';
+import { spawn, type ChildProcess } from 'node:child_process';
+import { mkdtemp, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import type { SandboxRuntimeConfig } from '@anthropic-ai/sandbox-runtime';
 import type { JoplinApiClient } from '../api/client.js';
 import type {
   RunnerMessage,
@@ -23,14 +24,8 @@ import type {
 } from './protocol.js';
 import { dispatchAllowedCall } from './allowlist.js';
 
-// Dynamically-loaded SandboxManager type
-interface SandboxManagerLike {
-  initialize(config: unknown): Promise<void>;
-  checkDependencies(): { errors: string[]; warnings: string[] };
-  wrapWithSandbox(command: string): Promise<string>;
-  cleanupAfterCommand(): void;
-  reset(): Promise<void>;
-}
+type SandboxManagerType =
+  (typeof import('@anthropic-ai/sandbox-runtime'))['SandboxManager'];
 
 const TIMEOUT_MS = 30_000;
 
@@ -74,11 +69,15 @@ export const SANDBOX_CONFIG = {
       '~/.claude',
     ],
   },
-};
+} satisfies SandboxRuntimeConfig;
+
+function quoteShellArg(value: string): string {
+  return `'${value.replaceAll("'", `'\\''`)}'`;
+}
 
 export class Broker {
   private client: JoplinApiClient;
-  private sandboxManager!: SandboxManagerLike;
+  private sandboxManager!: SandboxManagerType;
   private initialized = false;
 
   constructor(client: JoplinApiClient) {
@@ -93,9 +92,9 @@ export class Broker {
     if (this.initialized) return;
 
     // Load sandbox runtime
-    let srt: { SandboxManager: SandboxManagerLike };
+    let srt: typeof import('@anthropic-ai/sandbox-runtime');
     try {
-      srt = (await import('@anthropic-ai/sandbox-runtime')) as typeof srt;
+      srt = await import('@anthropic-ai/sandbox-runtime');
     } catch {
       throw new Error(
         'Sandbox runtime (@anthropic-ai/sandbox-runtime) is not installed. ' +
@@ -141,21 +140,6 @@ export class Broker {
       runnerPath = join(projectRoot, 'dist', 'sandbox', 'runner.js');
     }
 
-    const baseCommand = `node ${runnerPath}`;
-    const spawnCommand = await this.sandboxManager.wrapWithSandbox(baseCommand);
-
-    // Verify the sandbox wrapper actually wrapped the command.
-    // If wrapWithSandbox() silently returns the bare command (bug or
-    // regression), the runner would execute with full system access.
-    const hasSandbox =
-      spawnCommand.includes('bwrap') || spawnCommand.includes('sandbox-exec');
-    if (!hasSandbox) {
-      throw new Error(
-        'Sandbox wrapper did not produce a sandboxed command. ' +
-          'Refusing to execute untrusted code without OS-level isolation.',
-      );
-    }
-
     // Create temp dir for cwd
     const tmpDir = await mkdtemp(join(tmpdir(), 'joplin-sandbox-'));
 
@@ -163,22 +147,42 @@ export class Broker {
     let timer: ReturnType<typeof setTimeout> | null = null;
 
     try {
+      const baseCommand = [process.execPath, runnerPath]
+        .map(quoteShellArg)
+        .join(' ');
+      const { argv } = await this.sandboxManager.wrapWithSandboxArgv(
+        baseCommand,
+        undefined,
+        undefined,
+        undefined,
+        tmpDir,
+      );
+
+      // Fail closed if the runtime ever returns an unwrapped command.
+      const hasSandbox = argv.some(
+        (arg) =>
+          arg.includes('bwrap') ||
+          arg.includes('sandbox-exec') ||
+          arg.includes('srt-win'),
+      );
+      if (!hasSandbox) {
+        throw new Error(
+          'Sandbox wrapper did not produce a sandboxed command. ' +
+            'Refusing to execute untrusted code without OS-level isolation.',
+        );
+      }
+
       return await new Promise<unknown>((resolve, reject) => {
-        child = spawn(spawnCommand, {
-          shell: true,
+        child = spawn(argv[0], argv.slice(1), {
+          shell: false,
           cwd: tmpDir,
           env: { PATH: process.env.PATH, HOME: tmpDir },
           stdio: ['pipe', 'pipe', 'pipe'],
         });
 
-        // 30s kill timer
-        timer = setTimeout(() => {
-          child?.kill('SIGKILL');
-          reject(new Error('Script execution timed out (30s)'));
-        }, TIMEOUT_MS);
-
-        // Forward stderr to process.stderr
+        let stderrBuf = '';
         child.stderr?.on('data', (chunk: Buffer) => {
+          stderrBuf = (stderrBuf + chunk.toString()).slice(-8192);
           process.stderr.write(chunk);
         });
 
@@ -192,6 +196,14 @@ export class Broker {
             fn();
           }
         };
+
+        // 30s kill timer
+        timer = setTimeout(() => {
+          settle(() => {
+            child?.kill('SIGKILL');
+            reject(new Error('Script execution timed out (30s)'));
+          });
+        }, TIMEOUT_MS);
 
         child.stdout?.on('data', (chunk: Buffer) => {
           stdoutBuf += chunk.toString();
@@ -244,7 +256,12 @@ export class Broker {
         child.on('close', (exitCode) => {
           settle(() => {
             if (exitCode !== 0 && exitCode !== null) {
-              reject(new Error(`Runner exited with code ${exitCode}`));
+              const detail = stderrBuf.trim();
+              reject(
+                new Error(
+                  `Runner exited with code ${exitCode}${detail ? `: ${detail}` : ''}`,
+                ),
+              );
             } else {
               // Runner closed without sending result/error
               resolve(undefined);

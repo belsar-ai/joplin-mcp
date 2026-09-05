@@ -76,6 +76,6 @@ If a new version is available:
 
 1. Read the changelog / diff for security-relevant changes.
 2. Update the version in `package.json` and run `npm install`.
-3. Run the full test suite including integration tests (`npx vitest run`).
+3. Run the full test suite including integration tests (`npm test`).
 4. Verify the sandbox smoke check still passes (broker rejects unwrapped commands).
 5. Commit the update separately so it's easy to bisect if something breaks.
