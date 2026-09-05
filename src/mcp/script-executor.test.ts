@@ -8,7 +8,10 @@ vi.mock('@anthropic-ai/sandbox-runtime', () => ({
   SandboxManager: {
     initialize: vi.fn().mockResolvedValue(undefined),
     checkDependencies: vi.fn().mockReturnValue({ errors: [], warnings: [] }),
-    wrapWithSandbox: vi.fn(async (cmd: string) => `bwrap=1 ${cmd}`),
+    wrapWithSandboxArgv: vi.fn(async (cmd: string) => ({
+      argv: ['/bin/bash', '-c', `bwrap=1 ${cmd}`],
+      env: process.env,
+    })),
     cleanupAfterCommand: vi.fn(),
     reset: vi.fn().mockResolvedValue(undefined),
   },

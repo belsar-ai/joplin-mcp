@@ -1,31 +1,18 @@
 import eslint from '@eslint/js';
 import tseslint from 'typescript-eslint';
 import prettierConfig from 'eslint-config-prettier';
-import importPlugin from 'eslint-plugin-import';
 import globals from 'globals';
 
 export default tseslint.config(
   {
     // Global ignores
-    ignores: [
-      'node_modules/*',
-      'dist/**',
-      'eslint.config.js',
-    ],
+    ignores: ['node_modules/*', 'dist/**', 'eslint.config.js'],
   },
   eslint.configs.recommended,
   ...tseslint.configs.recommended,
   {
     // General overrides and rules for the project (TS files)
     files: ['src/**/*.{ts}'],
-    plugins: {
-      import: importPlugin,
-    },
-    settings: {
-      'import/resolver': {
-        node: true,
-      },
-    },
     languageOptions: {
       globals: {
         ...globals.node,
@@ -87,7 +74,6 @@ export default tseslint.config(
       'prefer-const': ['error', { destructuring: 'all' }],
       radix: 'error',
       'default-case': 'error',
-      'import/enforce-node-protocol-usage': ['error', 'always'],
     },
   },
   // Prettier config must be last

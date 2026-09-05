@@ -12,12 +12,11 @@
  * JSON protocol on stdout.
  */
 
-import vm from 'vm';
+import vm from 'node:vm';
 import type {
   BrokerMessage,
+  ExecuteMessage,
   RpcCallMessage,
-  RpcResultMessage,
-  RpcErrorMessage,
   ResultMessage,
   ErrorMessage,
 } from './protocol.js';
@@ -31,8 +30,49 @@ function writeLine(msg: object): void {
 // ── Stdin reader: newline-delimited JSON ──
 
 let stdinBuffer = '';
-type LineCallback = (msg: BrokerMessage) => void;
-let onMessage: LineCallback | null = null;
+let resolveExecute: ((msg: ExecuteMessage) => void) | null = null;
+let rejectExecute: ((error: Error) => void) | null = null;
+
+const executeMessage = new Promise<ExecuteMessage>((resolve, reject) => {
+  resolveExecute = resolve;
+  rejectExecute = reject;
+});
+
+type PendingRpc = {
+  resolve: (value: unknown) => void;
+  reject: (error: Error) => void;
+};
+
+const pendingRpc = new Map<number, PendingRpc>();
+
+function failPending(error: Error): void {
+  rejectExecute?.(error);
+  rejectExecute = null;
+  resolveExecute = null;
+  for (const pending of pendingRpc.values()) pending.reject(error);
+  pendingRpc.clear();
+}
+
+function routeMessage(msg: BrokerMessage): void {
+  if (msg.type === 'execute') {
+    resolveExecute?.(msg);
+    resolveExecute = null;
+    rejectExecute = null;
+    return;
+  }
+
+  if (msg.type !== 'rpc_result' && msg.type !== 'rpc_error') return;
+
+  const pending = pendingRpc.get(msg.id);
+  if (!pending) return;
+
+  pendingRpc.delete(msg.id);
+  if (msg.type === 'rpc_error') {
+    pending.reject(new Error(msg.error));
+  } else {
+    pending.resolve(msg.result);
+  }
+}
 
 process.stdin.setEncoding('utf8');
 process.stdin.on('data', (chunk: string) => {
@@ -42,27 +82,15 @@ process.stdin.on('data', (chunk: string) => {
     const line = stdinBuffer.slice(0, nl);
     stdinBuffer = stdinBuffer.slice(nl + 1);
     if (line.trim()) {
-      const msg = JSON.parse(line) as BrokerMessage;
-      if (onMessage) onMessage(msg);
+      try {
+        routeMessage(JSON.parse(line) as BrokerMessage);
+      } catch (error) {
+        failPending(error instanceof Error ? error : new Error(String(error)));
+      }
     }
   }
 });
-
-function waitForMessage(
-  predicate: (msg: BrokerMessage) => boolean,
-): Promise<BrokerMessage> {
-  return new Promise((resolve) => {
-    const prev = onMessage;
-    onMessage = (msg) => {
-      if (predicate(msg)) {
-        onMessage = prev;
-        resolve(msg);
-      } else if (prev) {
-        prev(msg);
-      }
-    };
-  });
-}
+process.stdin.on('error', (error) => failPending(error));
 
 // ── RPC machinery ──
 
@@ -71,17 +99,15 @@ let nextRpcId = 1;
 function makeRpcCall(method: string, args: unknown[]): Promise<unknown> {
   const id = nextRpcId++;
   const msg: RpcCallMessage = { type: 'rpc_call', id, method, args };
-  writeLine(msg);
 
-  return waitForMessage(
-    (m) =>
-      (m.type === 'rpc_result' || m.type === 'rpc_error') &&
-      (m as RpcResultMessage | RpcErrorMessage).id === id,
-  ).then((m) => {
-    if (m.type === 'rpc_error') {
-      throw new Error((m as RpcErrorMessage).error);
+  return new Promise((resolve, reject) => {
+    pendingRpc.set(id, { resolve, reject });
+    try {
+      writeLine(msg);
+    } catch (error) {
+      pendingRpc.delete(id);
+      reject(error instanceof Error ? error : new Error(String(error)));
     }
-    return (m as RpcResultMessage).result;
   });
 }
 
@@ -122,9 +148,7 @@ const consoleProxy = {
 
 async function main(): Promise<void> {
   // Wait for the execute message
-  const execMsg = (await waitForMessage(
-    (m) => m.type === 'execute',
-  )) as BrokerMessage & { type: 'execute'; code: string };
+  const execMsg = await executeMessage;
 
   const joplin = buildJoplinProxy();
 

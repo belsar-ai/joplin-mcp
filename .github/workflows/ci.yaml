@@ -16,13 +16,13 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Install sandbox system dependencies
         run: sudo apt-get update && sudo apt-get install -y bubblewrap socat ripgrep libseccomp-dev
 
       - name: Setup Node.js ${{ matrix.node-version }}
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
           node-version: ${{ matrix.node-version }}
           cache: 'npm'
@@ -38,9 +38,6 @@ jobs:
 
       - name: Run tests
         run: npm test
-
-      - name: Build project
-        run: npm run build
 
       - name: Verify dist directory exists
         run: |

@@ -1,6 +1,6 @@
-import { homedir } from 'os';
-import { join } from 'path';
-import { existsSync, readFileSync } from 'fs';
+import { existsSync, readFileSync } from 'node:fs';
+import { homedir } from 'node:os';
+import { join } from 'node:path';
 
 /**
  * Build the list of candidate settings.json paths for the current platform.

@@ -5,12 +5,12 @@ import {
   JoplinServer,
   determineReadOnly,
 } from './index.js';
-import * as fs from 'fs';
-import * as os from 'os';
+import * as fs from 'node:fs';
+import * as os from 'node:os';
 
 // Mock the fs and os modules
-vi.mock('fs');
-vi.mock('os');
+vi.mock('node:fs');
+vi.mock('node:os');
 
 const { mockSetRequestHandler, mockExecute } = vi.hoisted(() => {
   return {

@@ -44,7 +44,9 @@ export class HttpClient {
       return text ? JSON.parse(text) : null;
     } catch (error) {
       if (error instanceof Error) {
-        throw new Error(`Failed to connect to Joplin: ${error.message}`);
+        throw new Error(`Failed to connect to Joplin: ${error.message}`, {
+          cause: error,
+        });
       }
       throw error;
     }
