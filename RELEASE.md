@@ -18,6 +18,18 @@ This document outlines the process for creating new releases of `@belsar-ai/jopl
 
 This project uses a release strategy based on industry best practices like [Git Flow](https://www.atlassian.com/git/tutorials/comparing-workflows/gitflow-workflow). Releases are automated using `npm version` scripts and a GitHub Actions workflow.
 
+### Dependency security policy
+
+Development and CI use the npm version pinned in `package.json`. The project-level `.npmrc` requires dependency releases to be at least seven days old, and treats unreviewed dependency install scripts as errors. When updating dependencies, npm therefore selects the newest compatible versions outside the cooling period.
+
+Install the pinned package manager before entering the repository (older npm versions are intentionally rejected inside it):
+
+```bash
+npm install --global npm@12.0.2 --ignore-scripts
+```
+
+Urgent security fixes blocked by the cooling period require a temporary, package-specific `min-release-age-exclude` entry. Review and remove the exception in the same change.
+
 ### Versioning with Makefile
 
 All versioning is handled by the Makefile targets which call the `scripts/release.sh` script. These commands automatically update the `package.json` version, create a new commit, and create a new git tag.
@@ -64,7 +76,7 @@ This will trigger the GitHub Actions workflow to publish the stable release to n
 
 ### `@anthropic-ai/sandbox-runtime`
 
-This package is **pinned to an exact version** (no `^` or `~` prefix) because it is a pre-1.0 beta where even patch bumps can change sandbox behavior — e.g., default write paths, bwrap flags, seccomp filters. A silent change here could weaken or break our security boundary.
+This package is **pinned to an exact version** (no `^` or `~` prefix) because it is a pre-1.0 beta where even patch bumps can change sandbox behavior — e.g., default write paths, bwrap flags, seccomp filters. A silent change here could weaken or break our security boundary. The pinned version must also be outside the seven-day cooling period.
 
 **Before each release**, check for new versions:
 
