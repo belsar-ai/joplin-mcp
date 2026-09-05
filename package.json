@@ -89,13 +89,6 @@
   "engines": {
     "node": ">=22.0.0"
   },
-  "devEngines": {
-    "packageManager": {
-      "name": "npm",
-      "version": "12.0.2",
-      "onFail": "error"
-    }
-  },
   "allowScripts": {
     "fsevents@2.3.3": true
   }
