@@ -22,7 +22,7 @@ This project uses a release strategy based on industry best practices like [Git 
 
 Development and CI use the npm version pinned in `package.json`. The project-level `.npmrc` requires dependency releases to be at least seven days old, and treats unreviewed dependency install scripts as errors. When updating dependencies, npm therefore selects the newest compatible versions outside the cooling period. The only approved dependency script is the version-pinned macOS watcher dependency recorded in `allowScripts`; version changes require fresh review.
 
-Install the pinned package manager before entering the repository (older npm versions are intentionally rejected inside it):
+Install the pinned package manager before changing dependencies or creating a release. CI and the publishing workflow install this version explicitly; the package manifest does not reject older npm versions because that would also prevent consumers from running the published CLI with `npx`:
 
 ```bash
 npm install --global npm@12.0.2 --ignore-scripts
